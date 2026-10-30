@@ -177,7 +177,7 @@
 .bio-paper.template-themed.radha-krishna-devotional .portrait-frame{top:16.2%;left:14.2%;width:25.7%}
 .bio-paper.template-themed.mahadev-parvati-devotional .portrait-frame{top:18.1%;left:15.6%;width:25.8%}
 .bio-paper.template-themed.shri-ram-devotional .bio-header h2,.bio-paper.template-themed.mahadev-parvati-devotional .bio-header h2{top:35.2%;left:7%;width:44%}
-.bio-paper.template-themed.radha-krishna-devotional .bio-header h2{top:29.3%;left:43%;width:51%}
+.bio-paper.template-themed.radha-krishna-devotional .bio-header h2{top:29.3%;right:4.5%;left:auto;width:51%}
 .bio-paper.template-themed.shri-ram-devotional .bio-sections,.bio-paper.template-themed.radha-krishna-devotional .bio-sections,.bio-paper.template-themed.mahadev-parvati-devotional .bio-sections{position:absolute;z-index:2;top:40.5%;right:4.5%;bottom:8.5%;left:4.5%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:max-content;align-content:start;align-items:start;gap:2.3cqw 5%}
 .bio-paper.template-themed.radha-krishna-devotional .bio-sections{top:36.7%}
 .bio-paper.template-themed.shri-ram-devotional .bio-section,.bio-paper.template-themed.radha-krishna-devotional .bio-section,.bio-paper.template-themed.mahadev-parvati-devotional .bio-section{min-width:0}
@@ -210,6 +210,8 @@
 .bio-paper.ai-finished.design-floral:after{display:block;background:radial-gradient(ellipse at 5% 5%,var(--template-accent) 0 1.5%,transparent 1.8%) 0 0/12% 12%;border-color:transparent;opacity:.55}
 .bio-paper.ai-finished.design-arch:before{border-radius:44% 44% 2% 2%/13% 13% 2% 2%;box-shadow:inset 0 0 0 4px var(--template-contact),inset 0 0 0 6px var(--template-accent)}
 .bio-paper.ai-finished.design-minimal:after{display:none}
+.bio-paper.density-compact .bio-sections{gap:1.25cqw 4%}.bio-paper.density-compact dl div{padding:.55% 0;line-height:1.16}.bio-paper.density-compact h3{margin-top:3.5%}
+.bio-paper.density-airy .bio-sections{gap:3.2cqw 6%}.bio-paper.density-airy dl div{padding:1.45% 0;line-height:1.42}.bio-paper.density-airy h3{margin-top:7%}
 
 @media print{
   .bio-paper.template-themed,.bio-paper.ai-custom{-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -300,11 +302,24 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none!important}
 .bio-paper.background-weave{background-color:var(--active-paper);background-image:repeating-linear-gradient(0deg,transparent 0 8px,color-mix(in srgb,var(--active-primary) 6%,transparent) 8px 9px),repeating-linear-gradient(90deg,transparent 0 8px,color-mix(in srgb,var(--active-accent) 6%,transparent) 8px 9px)}
 .bio-paper.background-radiant{background-color:var(--active-paper);background-image:radial-gradient(circle at 50% 24%,color-mix(in srgb,var(--active-accent) 17%,transparent),transparent 35%),radial-gradient(circle at 50% 82%,color-mix(in srgb,var(--active-primary) 9%,transparent),transparent 36%)}
 .completion-note{margin-top:7px;color:#8a6b43;font-size:9px;font-weight:800;text-align:right}.completion-note.ready{color:#2d7255}
+.finish-studio-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:24px}
+.finish-change-fieldset,.finish-improvement-fieldset{margin:18px 0 0;border:0;padding:0}
+.finish-change-fieldset legend,.finish-improvement-fieldset legend{margin-bottom:9px;color:#5f6c65;font-size:10px;font-weight:900;letter-spacing:.04em;text-transform:uppercase}
+.finish-change-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.finish-change-option{position:relative;min-height:62px;border:1px solid #29483f1c;border-radius:12px;background:#faf8f2;padding:10px 30px 10px 11px;color:var(--ink);text-align:left;transition:.2s}
+.finish-change-option:hover,.finish-change-option.active{border-color:#c77a3f8c;background:#fff7eb;box-shadow:0 0 0 2px #c77a3f12}
+.finish-change-option span,.finish-change-option small{display:block}.finish-change-option span{font-size:11px;font-weight:900}.finish-change-option small{margin-top:3px;color:var(--muted);font-size:9px;line-height:1.3}.finish-change-option svg{position:absolute;top:9px;right:9px;color:var(--teal)}
+.finish-improvement-options{display:grid;gap:8px}
+.finish-improvement-options label{display:flex;cursor:pointer;gap:10px;border:1px solid #29483f1c;border-radius:12px;background:#faf8f2;padding:11px;transition:.2s}
+.finish-improvement-options label.active{border-color:#73529a70;background:#f7f0fb;box-shadow:0 0 0 2px #73529a12}
+.finish-improvement-options input{margin-top:3px;accent-color:var(--teal)}
+.finish-improvement-options span,.finish-improvement-options strong,.finish-improvement-options small{display:block}.finish-improvement-options strong{font-size:11px}.finish-improvement-options small{margin-top:3px;color:var(--muted);font-size:9px;line-height:1.4}
 
 @media(max-width:820px){
   .preview-shell{overflow-x:auto}
   .preview-shell .bio-paper{min-width:560px}
   .footer-help{width:100%;justify-content:flex-start}
+  .finish-studio-grid{grid-template-columns:1fr}
 }
 @media(max-width:540px){
   .market-steps{flex-wrap:wrap}
@@ -346,3 +361,4 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none!important}
 
 @media(max-width:900px){.auth-page{grid-template-columns:1fr}.auth-brand-panel{min-height:420px}.auth-form-panel{min-height:auto}.admin-metrics{grid-template-columns:repeat(2,1fr)}.creation-admin-grid{grid-template-columns:1fr}}
 @media(max-width:620px){.auth-brand-panel{min-height:380px;padding:24px}.auth-brand-copy h1{font-size:42px}.auth-brand-copy>p:last-child{font-size:14px}.auth-trust-list{display:none}.auth-form-panel{padding:18px}.auth-card{border-radius:22px;padding:22px}.admin-header{align-items:flex-start}.admin-secure{display:none}.admin-header .soft-button{font-size:0}.admin-header .soft-button svg{margin:0}.admin-heading{align-items:flex-start;flex-direction:column}.admin-metrics{grid-template-columns:1fr}.admin-tabs{overflow:auto}.admin-tabs button{white-space:nowrap}.creation-admin-card dl{grid-template-columns:1fr}.creation-fields p{grid-template-columns:1fr}.admin-table th,.admin-table td{padding:12px}}
+
