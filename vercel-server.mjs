@@ -72,6 +72,13 @@ const server = createServer(async (incoming, outgoing) => {
     console.error('Request failed', error);
     if (!outgoing.headersSent) {
       outgoing.statusCode = 500;
+      if ((incoming.url || '').startsWith('/api/')) {
+        outgoing.setHeader('content-type', 'application/json; charset=utf-8');
+        outgoing.end(JSON.stringify({
+          error: 'This feature is temporarily unavailable because secure account storage is not connected on the live site yet.',
+        }));
+        return;
+      }
       outgoing.setHeader('content-type', 'text/plain; charset=utf-8');
     }
     outgoing.end('The site could not complete this request.');
