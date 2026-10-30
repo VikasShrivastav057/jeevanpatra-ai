@@ -10,6 +10,8 @@ import { BiodataPaper, type BackgroundStyle, type FieldSection, type FrameStyle,
 
 type AiTone = 'warm' | 'concise' | 'traditional';
 type ColorPresetId = 'template' | 'maroon' | 'emerald' | 'navy' | 'rose' | 'purple' | 'teal' | 'custom';
+type FinishChangeTarget = 'layout' | 'colors' | 'typography' | 'photo' | 'border' | 'spacing' | 'sections' | 'header';
+type FinishImprovementMode = 'requested-only' | 'balanced' | 'best-version';
 const templates: { id: TemplateId; name: string; note: string }[] = templateCatalog.map((item) => ({ id: item.id, name: item.name, note: item.editorNote }));
 const initialFields: ProfileField[] = [
   { id: 'dob', label: 'Date of birth', value: '', section: 'personal' },
@@ -56,6 +58,21 @@ const colorPresets: { id: ColorPresetId; label: string; colors?: TemplateColors 
   { id: 'custom', label: 'Custom' },
 ];
 const defaultCustomColors: TemplateColors = { paper: '#fff8ec', primary: '#84252b', accent: '#d5a23f', text: '#4b2928' };
+const finishChangeOptions: { id: FinishChangeTarget; label: string; note: string }[] = [
+  { id: 'layout', label: 'Layout', note: 'Placement and columns' },
+  { id: 'colors', label: 'Colours', note: 'Palette and contrast' },
+  { id: 'typography', label: 'Fonts', note: 'Type style and hierarchy' },
+  { id: 'photo', label: 'Photo', note: 'Shape and position' },
+  { id: 'border', label: 'Border & print', note: 'Frame and background' },
+  { id: 'spacing', label: 'Spacing', note: 'Balance and readability' },
+  { id: 'sections', label: 'Sections', note: 'Order and grouping' },
+  { id: 'header', label: 'Header', note: 'Name and blessing style' },
+];
+const finishImprovementOptions: { id: FinishImprovementMode; label: string; note: string }[] = [
+  { id: 'requested-only', label: 'Only my changes', note: 'Keep everything else exactly as it is.' },
+  { id: 'balanced', label: 'Improve gently', note: 'Apply my changes and fix obvious balance or readability issues.' },
+  { id: 'best-version', label: 'Create the best version', note: 'Use the selected areas and AI judgement for a stronger result.' },
+];
 const draftKey = 'jeevanpatra-create-draft';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -69,7 +86,8 @@ function isTemplateDesign(value: unknown): value is TemplateDesign {
     && ['classic', 'floral', 'arch', 'minimal', 'rounded', 'oval', 'circle', 'double'].includes(item.borderStyle || '')
     && ['circle', 'rounded', 'square'].includes(item.photoShape || '')
     && ['classic', 'portrait-top'].includes(item.layout || '')
-    && ['classic', 'modern', 'traditional'].includes(item.fontStyle || '');
+    && ['classic', 'modern', 'traditional'].includes(item.fontStyle || '')
+    && (item.density === undefined || ['compact', 'balanced', 'airy'].includes(item.density));
 }
 
 function isFrameStyle(value: unknown): value is FrameStyle {
@@ -165,6 +183,8 @@ export default function Home() {
   const [finishOpen, setFinishOpen] = useState(false);
   const [stylePreference, setStylePreference] = useState('Traditional');
   const [styleRecommendation, setStyleRecommendation] = useState('Elegant, balanced and family-friendly. Keep every fact accurate and make the page easy to read.');
+  const [finishChangeTargets, setFinishChangeTargets] = useState<FinishChangeTarget[]>(['layout', 'colors', 'typography', 'spacing']);
+  const [finishImprovementMode, setFinishImprovementMode] = useState<FinishImprovementMode>('balanced');
   const [finishState, setFinishState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [finishError, setFinishError] = useState('');
   const [fieldBuilderOpen, setFieldBuilderOpen] = useState(false);
@@ -501,6 +521,9 @@ export default function Home() {
     setMobileNav(false);
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+  function toggleFinishChangeTarget(target: FinishChangeTarget) {
+    setFinishChangeTargets((current) => current.includes(target) ? current.filter((item) => item !== target) : [...current, target]);
+  }
   async function createAiDesign() {
     if (!designIdea.trim() && !designReference) return;
     setDesignState('loading'); setDesignError('');
@@ -519,7 +542,14 @@ export default function Home() {
     setFinishState('loading'); setFinishError('');
     try {
       const fieldSummary = profileFields.map(({ id, label, section, value }) => ({ id, label, section, hasValue: Boolean(value.trim()) }));
-      const response = await fetch('/api/ai/finalize', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, introduction: about, fields: fieldSummary, stylePreference, recommendation: styleRecommendation, currentTemplate: `${template}: ${active.name}` }) });
+      const selectedAreas = finishChangeOptions.filter((option) => finishChangeTargets.includes(option.id)).map((option) => option.label);
+      const improvementInstruction = finishImprovementOptions.find((option) => option.id === finishImprovementMode)?.note || '';
+      const finishingRecommendation = [
+        styleRecommendation.trim(),
+        selectedAreas.length ? `Change these specific areas: ${selectedAreas.join(', ')}.` : 'Do not change the visual design unless needed to follow the written instruction.',
+        `Improvement approach: ${improvementInstruction}`,
+      ].filter(Boolean).join(' ');
+      const response = await fetch('/api/ai/finalize', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, introduction: about, fields: fieldSummary, stylePreference, recommendation: finishingRecommendation, currentTemplate: `${template}: ${active.name}` }) });
       const data = await readApiResponse<{ introduction?: string; fieldOrder?: string[]; design?: TemplateDesign }>(response, 'AI could not finish this biodata.');
       if (!response.ok || typeof data.introduction !== 'string' || !data.fieldOrder || !data.design) throw new Error(data.error || 'AI could not finish this biodata.');
       const fieldById = new Map(profileFields.map((field) => [field.id, field]));
@@ -649,7 +679,43 @@ export default function Home() {
         {designError && <p className="ai-error" role="alert">{designError}</p>}
         <button className="primary-button mt-6 w-full justify-center py-3.5" onClick={createAiDesign} disabled={designState === 'loading' || (!designIdea.trim() && !designReference)}><WandSparkles size={17} /> {designState === 'loading' ? 'Studying and designing…' : designReference ? 'Create from this reference' : 'Create my template'}</button>
       </Modal>}
-      {finishOpen && <Modal label="AI finishing studio" onClose={() => setFinishOpen(false)}><div className="modal-icon"><Sparkles /></div><p className="eyebrow mx-auto w-fit">AI finishing studio</p><h2 className="mt-4 text-center font-serif text-3xl">How should the final biodata feel?</h2><p className="mt-3 text-center text-sm leading-6 text-[var(--muted)]">AI will keep every supplied fact, polish the introduction and coordinate the complete design.</p><label className="field-label mt-6">Style preference<select value={stylePreference} onChange={(event) => setStylePreference(event.target.value)}><option>Traditional</option><option>Old Style</option><option>Modern</option><option>Contemporary</option><option>Minimal</option><option>Royal</option><option>Custom</option></select></label><label className="field-label">Your recommendation<textarea rows={4} value={styleRecommendation} onChange={(event) => setStyleRecommendation(event.target.value)} placeholder="Example: Traditional Marathi feeling, readable serif fonts, cream paper and deep red details…" /></label><p className="privacy-note">Only your introduction and field labels are sent to Groq. Phone, address, family and other field values are not sent.</p>{finishError && <p className="ai-error" role="alert">{finishError}</p>}<button className="primary-button mt-6 w-full justify-center py-3.5" onClick={finishWithAi} disabled={finishState === 'loading'}><Sparkles size={17} /> {finishState === 'loading' ? 'Creating the final biodata…' : 'Create the best final biodata'}</button></Modal>}
+      {finishOpen && <Modal label="AI finishing studio" onClose={() => setFinishOpen(false)} wide>
+        <div className="modal-icon"><Sparkles /></div>
+        <p className="eyebrow mx-auto w-fit">AI finishing studio</p>
+        <h2 className="mt-4 text-center font-serif text-3xl">What should AI improve?</h2>
+        <p className="mt-3 text-center text-sm leading-6 text-[var(--muted)]">Choose the exact parts you want changed. AI will keep every supplied fact and follow your instruction.</p>
+        <div className="finish-studio-grid mt-6">
+          <div>
+            <label className="field-label mt-0">Overall style<select value={stylePreference} onChange={(event) => setStylePreference(event.target.value)}><option>Traditional</option><option>Old Style</option><option>Modern</option><option>Contemporary</option><option>Minimal</option><option>Royal</option><option>Custom</option></select></label>
+            <fieldset className="finish-change-fieldset">
+              <legend>What do you want to change specifically?</legend>
+              <div className="finish-change-grid">
+                {finishChangeOptions.map((option) => {
+                  const selected = finishChangeTargets.includes(option.id);
+                  return <button key={option.id} type="button" className={`finish-change-option ${selected ? 'active' : ''}`} aria-pressed={selected} onClick={() => toggleFinishChangeTarget(option.id)}>
+                    <span>{option.label}</span><small>{option.note}</small>{selected && <Check size={15} />}
+                  </button>;
+                })}
+              </div>
+            </fieldset>
+          </div>
+          <div>
+            <fieldset className="finish-improvement-fieldset">
+              <legend>How freely should AI improve it?</legend>
+              <div className="finish-improvement-options">
+                {finishImprovementOptions.map((option) => <label key={option.id} aria-label={`${option.label}: ${option.note}`} className={finishImprovementMode === option.id ? 'active' : ''}>
+                  <input type="radio" name="finish-improvement-mode" value={option.id} checked={finishImprovementMode === option.id} onChange={() => setFinishImprovementMode(option.id)} />
+                  <span><strong>{option.label}</strong><small>{option.note}</small></span>
+                </label>)}
+              </div>
+            </fieldset>
+            <label className="field-label">Describe the exact change<textarea rows={5} maxLength={800} value={styleRecommendation} onChange={(event) => setStyleRecommendation(event.target.value)} placeholder="Example: Keep the Radha Krishna artwork. Put my name beneath Radha Krishna on the right, use a larger traditional serif font, and reduce empty space between sections." /></label>
+          </div>
+        </div>
+        <p className="privacy-note">Your visual choices, introduction and field labels are sent to Groq. Phone, address, family and other field values are not sent.</p>
+        {finishError && <p className="ai-error" role="alert">{finishError}</p>}
+        <button className="primary-button mt-6 w-full justify-center py-3.5" onClick={finishWithAi} disabled={finishState === 'loading'}><Sparkles size={17} /> {finishState === 'loading' ? 'Creating the final biodata…' : 'Apply my choices with AI'}</button>
+      </Modal>}
     </main>
   );
 }
