@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, LayoutTemplate, Palette, Sparkles, WandSparkles, X } from 'lucide-react';
 import { templateCatalog } from '../lib/template-catalog';
+import { readApiResponse } from '../lib/read-api-response';
 import { BiodataPaper, type TemplateDesign } from '../components/biodata-paper';
 
 export default function TemplateGallery() {
@@ -46,7 +47,7 @@ export default function TemplateGallery() {
     setDesignState('loading'); setDesignError('');
     try {
       const response = await fetch('/api/ai/design', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idea: designIdea }) });
-      const data = (await response.json()) as { design?: TemplateDesign; error?: string };
+      const data = await readApiResponse<{ design?: TemplateDesign }>(response, 'AI could not create this design.');
       if (!response.ok || !data.design) throw new Error(data.error || 'AI could not create this design.');
       sessionStorage.setItem('jeevanpatra-ai-design', JSON.stringify(data.design));
       window.location.href = '/create?template=ai-custom';
@@ -74,3 +75,4 @@ function Modal({ children, onClose, label }: { children: React.ReactNode; onClos
   function close() { if (dialog.current?.open) dialog.current.close(); else onClose(); }
   return <dialog ref={dialog} className="modal-card" aria-label={label} aria-modal="true" onClose={onClose}><button className="modal-close" onClick={close} aria-label="Close dialog"><X size={18} /></button>{children}</dialog>;
 }
+
