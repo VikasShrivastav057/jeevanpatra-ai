@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowDown, ArrowUp, Check, ChevronDown, LayoutTemplate, ListPlus, Menu, Palette, Plus, Sparkles, Trash2, Upload, WandSparkles, X } from 'lucide-react';
 import { builtInTemplateIds, getTemplateById, templateCatalog, type TemplateId } from '../../lib/template-catalog';
+import { readApiResponse } from '../../lib/read-api-response';
 import { BiodataPaper, type BackgroundStyle, type FieldSection, type FrameStyle, type ProfileField, type TemplateColors, type TemplateDesign } from '../../components/biodata-paper';
 
 type AiTone = 'warm' | 'concise' | 'traditional';
@@ -400,7 +401,7 @@ export default function Home() {
     setAiState('loading'); setAiError('');
     try {
       const response = await fetch('/api/ai/improve', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, introduction: about, tone: aiTone }) });
-      const data = (await response.json()) as { introduction?: string; error?: string };
+      const data = await readApiResponse<{ introduction?: string }>(response, 'AI could not rewrite this introduction.');
       if (!response.ok || !data.introduction) throw new Error(data.error || 'AI could not rewrite this introduction.');
       setAbout(data.introduction); setAiOpen(false); setAiState('idle');
     } catch (error) { setAiState('error'); setAiError(error instanceof Error ? error.message : 'Something went wrong.'); }
@@ -505,7 +506,7 @@ export default function Home() {
     setDesignState('loading'); setDesignError('');
     try {
       const response = await fetch('/api/ai/design', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idea: designIdea, referenceImage: designReference || undefined }) });
-      const data = (await response.json()) as { design?: TemplateDesign; error?: string };
+      const data = await readApiResponse<{ design?: TemplateDesign }>(response, 'AI could not create this design.');
       if (!response.ok || !data.design) throw new Error(data.error || 'AI could not create this design.');
       setCustomDesign(data.design); setFinishDesign(undefined); setFrameStyle('template'); setBackgroundStyle('template'); setColorPreset('template'); setTemplate('ai-custom'); setDesignState('idle'); setDesignOpen(false); setDesignReference(''); setDesignReferenceName('');
       const url = new URL(window.location.href);
@@ -519,7 +520,7 @@ export default function Home() {
     try {
       const fieldSummary = profileFields.map(({ id, label, section, value }) => ({ id, label, section, hasValue: Boolean(value.trim()) }));
       const response = await fetch('/api/ai/finalize', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, introduction: about, fields: fieldSummary, stylePreference, recommendation: styleRecommendation, currentTemplate: `${template}: ${active.name}` }) });
-      const data = (await response.json()) as { introduction?: string; fieldOrder?: string[]; design?: TemplateDesign; error?: string };
+      const data = await readApiResponse<{ introduction?: string; fieldOrder?: string[]; design?: TemplateDesign }>(response, 'AI could not finish this biodata.');
       if (!response.ok || typeof data.introduction !== 'string' || !data.fieldOrder || !data.design) throw new Error(data.error || 'AI could not finish this biodata.');
       const fieldById = new Map(profileFields.map((field) => [field.id, field]));
       const reordered = data.fieldOrder.map((id) => fieldById.get(id)).filter((field): field is ProfileField => Boolean(field));
@@ -659,3 +660,4 @@ function Modal({ children, onClose, label, wide = false }: { children: React.Rea
   function close() { if (dialog.current?.open) dialog.current.close(); else onClose(); }
   return <dialog ref={dialog} className={`modal-card ${wide ? 'wide' : ''}`} aria-label={label} aria-modal="true" onClose={onClose}><button className="modal-close" onClick={close} aria-label="Close dialog"><X size={18} /></button>{children}</dialog>;
 }
+
