@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { sites } from '@openai/sites-vite-plugin';
 import tailwindcss from '@tailwindcss/postcss';
 import vinext from 'vinext';
@@ -12,6 +12,9 @@ const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
 
 export default defineConfig(async () => {
   const { d1, r2 } = await readHostingConfig();
+  const hasSitesHostingConfig = await fileExists(
+    new URL('./.openai/hosting.json', import.meta.url),
+  );
   const localBindingConfig = {
     main: 'vinext/server/fetch-handler',
     compatibility_flags: ['nodejs_compat'],
@@ -50,7 +53,7 @@ export default defineConfig(async () => {
       : undefined,
     plugins: [
       vinext(),
-      sites(),
+      ...(hasSitesHostingConfig ? [sites()] : []),
       cloudflare({
         viteEnvironment: { name: 'rsc', childEnvironments: ['ssr'] },
         config: localBindingConfig,
@@ -58,6 +61,15 @@ export default defineConfig(async () => {
     ],
   };
 });
+
+async function fileExists(path: URL) {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function readHostingConfig() {
   const configPath = process.env.JEEVANPATRA_HOSTING_CONFIG_PATH || new URL('./.openai/hosting.json', import.meta.url);
@@ -71,3 +83,4 @@ async function readHostingConfig() {
     return {};
   }
 }
+
