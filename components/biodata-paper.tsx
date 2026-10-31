@@ -3,6 +3,8 @@ import type { CSSProperties } from 'react';
 import { getTemplateById, type TemplateId } from '../lib/template-catalog';
 import type { DevotionalArtwork } from '../lib/devotional-artwork';
 import type { UploadedArtwork } from '../lib/uploaded-artwork';
+import type { PhotoAdjustment, PhotoPlacement } from '../lib/photo-adjustment';
+import { ProfilePhoto } from './profile-photo';
 
 export type FieldSection = 'personal' | 'family' | 'contact' | 'preferences';
 export type ProfileField = { id: string; label: string; value: string; section: FieldSection; group?: string };
@@ -12,7 +14,7 @@ export type BackgroundStyle = 'template' | 'plain' | 'parchment' | 'dots' | 'geo
 export type TemplateColors = { paper: string; primary: string; accent: string; text: string };
 export type TemplateDesign = { name: string; note: string; primary: string; accent: string; paper: string; text: string; borderStyle: BorderStyle; photoShape: 'circle' | 'rounded' | 'square'; layout: 'classic' | 'portrait-top'; fontStyle: 'classic' | 'modern' | 'traditional'; blessing: string; blessingOverride?: string; density?: 'compact' | 'balanced' | 'airy'; artwork?: DevotionalArtwork; nameSize?: 'small' | 'normal' | 'large'; editedProperties?: string[] };
 
-export function BiodataPaper({ template, photo, name, about, fields, design, uploadedArtwork, frameStyle = 'template', backgroundStyle = 'template', colorOverride, compact = false }: { template: TemplateId; photo: string; name: string; about: string; fields: ProfileField[]; design?: TemplateDesign; uploadedArtwork?: UploadedArtwork; frameStyle?: FrameStyle; backgroundStyle?: BackgroundStyle; colorOverride?: TemplateColors; compact?: boolean }) {
+export function BiodataPaper({ template, photo, name, about, fields, design, uploadedArtwork, photoAdjustment, onPhotoPlacementChange, onPhotoMoveEnd, frameStyle = 'template', backgroundStyle = 'template', colorOverride, compact = false }: { template: TemplateId; photo: string; name: string; about: string; fields: ProfileField[]; design?: TemplateDesign; uploadedArtwork?: UploadedArtwork; photoAdjustment?: PhotoAdjustment; onPhotoPlacementChange?: (placement: PhotoPlacement) => void; onPhotoMoveEnd?: () => void; frameStyle?: FrameStyle; backgroundStyle?: BackgroundStyle; colorOverride?: TemplateColors; compact?: boolean }) {
   const personal = fields.filter((field) => field.section === 'personal' && field.label.trim() && field.value.trim());
   const family = fields.filter((field) => field.section === 'family' && field.label.trim() && field.value.trim());
   const contact = fields.filter((field) => field.section === 'contact' && field.label.trim() && field.value.trim());
@@ -39,6 +41,7 @@ export function BiodataPaper({ template, photo, name, about, fields, design, upl
   const replaceHeader = uploadedArtwork?.placement === 'replace-header' && ['mahadev-parvati-devotional', 'radha-krishna-devotional', 'shri-ram-devotional'].includes(template);
   const artworkPlacement = replaceHeader ? 'replace-header' : uploadedArtwork?.placement === 'below-details' ? 'below-details' : 'above-details';
   const extraImage = uploadedArtwork && <div className={`uploaded-artwork artwork-placement-${artworkPlacement} artwork-size-${uploadedArtwork.size}`}><Image src={uploadedArtwork.src} alt="Uploaded biodata artwork" fill unoptimized loading="eager" /></div>;
+  const portrait = <ProfilePhoto src={photo} name={displayName} adjustment={photoAdjustment} onPlacementChange={onPhotoPlacementChange} onMoveEnd={onPhotoMoveEnd} />;
   const groups = new Map<string, ProfileField[]>();
   for (const field of fields) {
     if (!field.group?.trim() || !field.value.trim()) continue;
@@ -49,7 +52,8 @@ export function BiodataPaper({ template, photo, name, about, fields, design, upl
   return <article className={classes} style={style} aria-hidden={compact || undefined}>
     <div className="ornament top" aria-hidden="true">✦</div>
     <div className="bio-blessing">{blessing}</div>
-    <div className="bio-header"><div><small>Marriage biodata</small><h2>{displayName}</h2>{about.trim() && <p>{about}</p>}</div><div className="portrait-frame">{photo ? <Image src={photo} alt={`${displayName} profile`} fill unoptimized /> : <span className="portrait-placeholder">Add photo</span>}</div></div>
+    <div className="bio-header"><div><small>Marriage biodata</small><h2>{displayName}</h2>{about.trim() && <p>{about}</p>}</div>{photoAdjustment?.placement ? <div className="portrait-frame portrait-ghost" aria-hidden="true" /> : portrait}</div>
+    {photoAdjustment?.placement && portrait}
     {replaceHeader && extraImage}
     <div className={`bio-sections ${uploadedArtwork && artworkPlacement === 'above-details' ? 'with-artwork-above' : ''}`}>
       {uploadedArtwork && artworkPlacement === 'above-details' && extraImage}

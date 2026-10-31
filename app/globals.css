@@ -293,6 +293,20 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none!important}
 .bio-paper.design-rounded:before{border-radius:7%}
 .bio-paper.name-large .bio-header h2{font-size:clamp(20px,4.8cqw,38px)!important}
 .bio-paper.name-small .bio-header h2{font-size:clamp(13px,2.8cqw,23px)!important}
+.portrait-ghost{visibility:hidden;pointer-events:none}
+.bio-paper .portrait-manual{position:absolute;box-sizing:border-box;min-width:0;max-width:none;flex:none}
+.bio-paper .portrait-editable{touch-action:none;cursor:grab;user-select:none;box-shadow:0 0 0 3px #2e9e91,0 3px 14px #0003}
+.bio-paper .portrait-editable:active{cursor:grabbing}
+.profile-photo-drop.drag-active{border-radius:15px;outline:3px solid var(--teal);background:#e6f3ed}
+.photo-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.photo-actions .soft-button{padding:10px 12px;font-size:11px}
+.photo-actions p{width:100%;font-size:10px;line-height:1.5;color:var(--muted)}.photo-reset{border:0;background:transparent;padding:6px 0;color:var(--teal);font-size:11px;text-decoration:underline}
+.photo-crop-controls{display:grid;gap:16px;margin-top:24px}.photo-crop-controls p{margin:0;font-size:12px;line-height:1.5;color:var(--muted)}
+.photo-crop-stage{position:relative;display:block;width:min(260px,100%);aspect-ratio:1;margin:auto;overflow:hidden;padding:0;border:3px solid #d8ba7e;background:#eee8dd;touch-action:none;cursor:grab;user-select:none}
+.photo-crop-stage:active{cursor:grabbing}.photo-crop-stage img,.portrait-editable img{pointer-events:none;user-select:none}
+.photo-crop-controls label,.photo-position-toolbar label{display:block;font-size:12px;font-weight:700;color:var(--ink)}
+.photo-crop-controls output,.photo-position-toolbar output{float:right;font-weight:400}.photo-crop-controls input,.photo-position-toolbar input{display:block;width:100%;min-height:28px;margin-top:6px;accent-color:var(--teal);cursor:pointer}
+.photo-position-toolbar{display:grid;gap:12px;padding:16px 20px;border-bottom:1px solid #29483f22;background:#eff7f3}.photo-position-toolbar>strong{font-size:15px}.photo-position-toolbar p{margin:0;font-size:11px;line-height:1.5;color:var(--muted)}.photo-position-toolbar .primary-button,.photo-position-toolbar .soft-button{padding:10px 12px;font-size:12px}
+@media print{.bio-paper .portrait-editable{box-shadow:none;cursor:default}}
 .bio-paper.template-themed.font-modern,.bio-paper.template-themed.font-modern :is(h2,h3,.bio-blessing,.bio-header p){font-family:var(--font-sans)!important}
 .bio-paper.template-themed.font-classic,.bio-paper.template-themed.font-classic :is(h2,h3,.bio-blessing,.bio-header p){font-family:var(--font-serif)!important}
 .bio-paper.template-themed.font-traditional,.bio-paper.template-themed.font-traditional :is(h2,h3,.bio-blessing,.bio-header p){font-family:Georgia,'Times New Roman',serif!important}

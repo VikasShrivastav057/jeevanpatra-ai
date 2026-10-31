@@ -15,7 +15,9 @@ export async function printBiodata(paper: HTMLElement) {
   const style = doc.createElement('style');
   style.textContent = '@page{size:A4 portrait;margin:0}html,body{margin:0!important;padding:0!important;width:210mm!important;height:297mm!important;overflow:hidden!important;background:white}.bio-paper{box-sizing:border-box!important;width:210mm!important;max-width:none!important;min-width:0!important;height:297mm!important;min-height:0!important;max-height:297mm!important;margin:0!important;box-shadow:none!important;border-radius:0!important;overflow:hidden!important;break-inside:avoid;print-color-adjust:exact!important;-webkit-print-color-adjust:exact!important}';
   doc.head.appendChild(style);
-  doc.body.appendChild(paper.cloneNode(true));
+  const copy = paper.cloneNode(true) as HTMLElement;
+  for (const editControl of copy.querySelectorAll('[data-photo-edit]')) editControl.classList.remove('portrait-editable');
+  doc.body.appendChild(copy);
   for (const image of doc.images) { image.loading = 'eager'; image.fetchPriority = 'high'; }
   try {
     await Promise.all(loads);

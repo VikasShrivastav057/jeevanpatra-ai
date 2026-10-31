@@ -9,6 +9,8 @@ import { readApiResponse } from '../../lib/read-api-response';
 import { printBiodata } from '../../lib/print-biodata';
 import { isUploadedArtwork, type UploadedArtwork } from '../../lib/uploaded-artwork';
 import type { FinishResult } from '../../lib/finishing-plan';
+import { PhotoCropEditor } from '../../components/profile-photo';
+import { boundPhotoPlacement, defaultPhotoCrop, isPhotoAdjustment, resizePhoto, sameExceptPhotoAdjustment, type PhotoAdjustment, type PhotoCrop } from '../../lib/photo-adjustment';
 import { BiodataPaper, type BackgroundStyle, type FieldSection, type FrameStyle, type ProfileField, type TemplateColors, type TemplateDesign } from '../../components/biodata-paper';
 
 type AiTone = 'warm' | 'concise' | 'traditional';
@@ -149,6 +151,7 @@ function completionSignature(value: {
   colorPreset: ColorPresetId;
   customColors: TemplateColors;
   uploadedArtwork?: UploadedArtwork;
+  photoAdjustment?: PhotoAdjustment;
 }) {
   return JSON.stringify(value);
 }
@@ -158,6 +161,12 @@ export default function Home() {
   const [name, setName] = useState('');
   const [about, setAbout] = useState('');
   const [photo, setPhoto] = useState('');
+  const [photoAdjustment, setPhotoAdjustment] = useState<PhotoAdjustment>();
+  const [photoCropOpen, setPhotoCropOpen] = useState(false);
+  const [photoCropDraft, setPhotoCropDraft] = useState<PhotoCrop>({ ...defaultPhotoCrop });
+  const [photoCropRadius, setPhotoCropRadius] = useState('50%');
+  const [photoMoveMode, setPhotoMoveMode] = useState(false);
+  const [photoDropActive, setPhotoDropActive] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [designOpen, setDesignOpen] = useState(false);
@@ -211,6 +220,7 @@ export default function Home() {
   const designReferenceInput = useRef<HTMLInputElement>(null);
   const nameInput = useRef<HTMLInputElement>(null);
   const photoObjectUrl = useRef<string | undefined>(undefined);
+  const photoUploadRequest = useRef<AbortController | undefined>(undefined);
   const availableTemplates = useMemo(() => customDesign ? [...templates, { id: 'ai-custom' as const, name: customDesign.name, note: 'Created with AI' }] : templates, [customDesign]);
   const active = useMemo(() => availableTemplates.find((item) => item.id === template) || availableTemplates[0], [availableTemplates, template]);
   const quickTemplates = useMemo(() => {
@@ -224,7 +234,7 @@ export default function Home() {
     if (colorPreset === 'custom') return customColors;
     return colorPresets.find((option) => option.id === colorPreset)?.colors;
   }, [colorPreset, customColors]);
-  const currentCompletionSignature = useMemo(() => completionSignature({ name, about, profileFields, template, customDesign, finishDesign, frameStyle, backgroundStyle, colorPreset, customColors, uploadedArtwork }), [about, backgroundStyle, colorPreset, customColors, customDesign, finishDesign, frameStyle, name, profileFields, template, uploadedArtwork]);
+  const currentCompletionSignature = useMemo(() => completionSignature({ name, about, profileFields, template, customDesign, finishDesign, frameStyle, backgroundStyle, colorPreset, customColors, uploadedArtwork, photoAdjustment }), [about, backgroundStyle, colorPreset, customColors, customDesign, finishDesign, frameStyle, name, profileFields, template, uploadedArtwork, photoAdjustment]);
   const latestFinishSignature = useRef(currentCompletionSignature);
   latestFinishSignature.current = currentCompletionSignature;
   const finishRequestKey = JSON.stringify({ styleRecommendation, stylePreference, finishChangeTargets, finishImprovementMode });
@@ -250,6 +260,8 @@ export default function Home() {
       let restoredCompletedSignature: string | undefined;
       let savedProfileCustomDesign: TemplateDesign | undefined;
       let restoredUploadedArtwork: UploadedArtwork | undefined;
+      let restoredPhotoAdjustment: PhotoAdjustment | undefined;
+      let draftHasPhotoSetting = false;
       let draftHasArtworkSetting = false;
       let draftHasProfileData = false;
       let resolvedAccountState: 'signed-in' | 'signed-out' = 'signed-out';
@@ -257,7 +269,9 @@ export default function Home() {
       try {
         const savedDraft = sessionStorage.getItem(draftKey);
         if (savedDraft) {
-          const draft = JSON.parse(savedDraft) as { name?: unknown; about?: unknown; profileFields?: unknown; template?: unknown; customDesign?: unknown; finishDesign?: unknown; frameStyle?: unknown; backgroundStyle?: unknown; colorPreset?: unknown; customColors?: unknown; photoKey?: unknown; uploadedArtwork?: unknown };
+          const draft = JSON.parse(savedDraft) as { name?: unknown; about?: unknown; profileFields?: unknown; template?: unknown; customDesign?: unknown; finishDesign?: unknown; frameStyle?: unknown; backgroundStyle?: unknown; colorPreset?: unknown; customColors?: unknown; photoKey?: unknown; uploadedArtwork?: unknown; photoAdjustment?: unknown };
+          draftHasPhotoSetting = 'photoAdjustment' in draft;
+          if (isPhotoAdjustment(draft.photoAdjustment)) restoredPhotoAdjustment = draft.photoAdjustment;
           draftHasArtworkSetting = 'uploadedArtwork' in draft;
           if (isUploadedArtwork(draft.uploadedArtwork)) restoredUploadedArtwork = draft.uploadedArtwork;
           if (typeof draft.name === 'string') restoredName = draft.name;
@@ -287,6 +301,7 @@ export default function Home() {
         const payload = response.ok ? await response.json() as unknown : undefined;
         const profile = isRecord(payload) && isRecord(payload.profile) ? payload.profile : undefined;
         const details = profile && isRecord(profile.details) ? profile.details : undefined;
+        if (!draftHasPhotoSetting && details && isPhotoAdjustment(details.photoAdjustment)) restoredPhotoAdjustment = details.photoAdjustment;
         if (!draftHasArtworkSetting && details && isUploadedArtwork(details.uploadedArtwork)) restoredUploadedArtwork = details.uploadedArtwork;
         if (profile?.template === 'ai-custom' && details && isTemplateDesign(details.customDesign)) savedProfileCustomDesign = details.customDesign;
         if (details && restoredBackgroundStyle === undefined && isBackgroundStyle(details.backgroundStyle)) restoredBackgroundStyle = details.backgroundStyle;
@@ -339,6 +354,7 @@ export default function Home() {
       if (restoredCustomColors) setCustomColors(restoredCustomColors);
       if (restoredCompletedSignature) setCompletedSignature(restoredCompletedSignature);
       if (restoredUploadedArtwork) setUploadedArtwork(restoredUploadedArtwork);
+      if (restoredPhotoAdjustment) setPhotoAdjustment(restoredPhotoAdjustment);
       if (restoredPhotoKey) {
         const filename = restoredPhotoKey.split('/').at(-1);
         if (filename && /^portrait\.(?:jpg|png)$/.test(filename)) { setPhotoKey(restoredPhotoKey); setPhoto(`/api/photo/${filename}`); }
@@ -349,12 +365,17 @@ export default function Home() {
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => () => { if (photoObjectUrl.current) URL.revokeObjectURL(photoObjectUrl.current); }, []);
+  useEffect(() => () => { photoUploadRequest.current?.abort(); if (photoObjectUrl.current) URL.revokeObjectURL(photoObjectUrl.current); }, []);
+  useEffect(() => {
+    if (!photoMoveMode) return;
+    document.querySelector('.preview-shell')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelector<HTMLButtonElement>('[data-photo-edit]')?.focus({ preventScroll: true });
+  }, [photoMoveMode]);
 
   useEffect(() => {
     if (!draftReady) return;
-    sessionStorage.setItem(draftKey, JSON.stringify({ name, about, profileFields, template, customDesign, finishDesign, frameStyle, backgroundStyle, colorPreset, customColors, photoKey, uploadedArtwork: uploadedArtwork ?? null }));
-  }, [about, backgroundStyle, colorPreset, customColors, customDesign, draftReady, finishDesign, frameStyle, name, photoKey, profileFields, template, uploadedArtwork]);
+    sessionStorage.setItem(draftKey, JSON.stringify({ name, about, profileFields, template, customDesign, finishDesign, frameStyle, backgroundStyle, colorPreset, customColors, photoKey, uploadedArtwork: uploadedArtwork ?? null, photoAdjustment: photoAdjustment ?? null }));
+  }, [about, backgroundStyle, colorPreset, customColors, customDesign, draftReady, finishDesign, frameStyle, name, photoKey, profileFields, template, uploadedArtwork, photoAdjustment]);
 
   useEffect(() => {
     const context = (document as unknown as { modelContext?: { registerTool?: (tool: unknown, options?: { signal: AbortSignal }) => void | Promise<void> } }).modelContext;
@@ -382,26 +403,50 @@ export default function Home() {
   }, []);
 
   async function handlePhoto(file?: File) {
-    if (!file) return;
+    if (!file || photoUploadRequest.current) return;
     setPhotoError('');
-    if (!['image/jpeg', 'image/png'].includes(file.type) || file.size > 5_000_000) {
+    if (!['image/jpeg', 'image/png'].includes(file.type) || !file.size || file.size > 5_000_000) {
       setPhotoState('error'); setPhotoError('Choose a JPG or PNG image under 5 MB.'); return;
     }
-    if (photoObjectUrl.current) URL.revokeObjectURL(photoObjectUrl.current);
-    photoObjectUrl.current = URL.createObjectURL(file);
-    setPhoto(photoObjectUrl.current); setPhotoKey(undefined); setPhotoState('uploading');
+    const controller = new AbortController(); photoUploadRequest.current = controller;
+    setPhotoState('uploading');
+    const nextUrl = URL.createObjectURL(file);
     try {
+      const image = new window.Image(); image.src = nextUrl;
+      try { await image.decode(); } catch { throw new Error('This file could not be opened as a photo. Choose a valid JPG or PNG.'); }
       const form = new FormData(); form.append('photo', file);
-      const response = await fetch('/api/photo', { method: 'POST', body: form });
-      let data: { key?: string; error?: string } = {};
-      try { data = (await response.json()) as typeof data; } catch { data = {}; }
+      const response = await fetch('/api/photo', { method: 'POST', body: form, signal: controller.signal });
+      const data = await readApiResponse<{ key?: string }>(response, 'The photo could not be uploaded.');
       if (!response.ok || !data.key) throw new Error(data.error || (response.status === 401 ? 'Sign in to save this photo with your biodata.' : 'The photo could not be uploaded.'));
-      setPhotoKey(data.key); setPhotoState('saved');
+      if (controller.signal.aborted) { URL.revokeObjectURL(nextUrl); return; }
+      if (photoObjectUrl.current) URL.revokeObjectURL(photoObjectUrl.current);
+      photoObjectUrl.current = nextUrl;
+      setPhoto(nextUrl); setPhotoKey(data.key); setPhotoState('saved');
+      setPhotoAdjustment(current => current ? { ...current, crop: { ...defaultPhotoCrop } } : undefined);
     } catch (error) {
-      setPhotoState('error'); setPhotoError(error instanceof Error ? error.message : 'The photo could not be uploaded.');
+      URL.revokeObjectURL(nextUrl);
+      if (!controller.signal.aborted) { setPhotoState('error'); setPhotoError(error instanceof Error ? error.message : 'The photo could not be uploaded.'); }
+    } finally { if (photoUploadRequest.current === controller) photoUploadRequest.current = undefined; }
+  }
+  function startPhotoMove() {
+    if (!photo || photoState === 'uploading') return;
+    if (!photoAdjustment?.placement) {
+      const paper = document.querySelector('.preview-shell .bio-paper')?.getBoundingClientRect();
+      const frame = document.querySelector('[data-profile-photo]')?.getBoundingClientRect();
+      if (!paper?.width || !paper.height || !frame?.width) return;
+      const placement = boundPhotoPlacement({ x: (frame.left - paper.left) / paper.width * 100, y: (frame.top - paper.top) / paper.height * 100, width: frame.width / paper.width * 100 });
+      setPhotoAdjustment(current => ({ crop: current?.crop || { ...defaultPhotoCrop }, placement }));
     }
+    setPhotoMoveMode(true);
+  }
+  function openPhotoCrop() {
+    setPhotoMoveMode(false);
+    setPhotoCropDraft({ ...(photoAdjustment?.crop || defaultPhotoCrop) });
+    const frame = document.querySelector('[data-profile-photo]');
+    setPhotoCropRadius(frame ? getComputedStyle(frame).borderRadius : '50%'); setPhotoCropOpen(true);
   }
   async function saveProfile() {
+    if (photoUploadRequest.current || artworkUploadState === 'uploading') return;
     setSaveError('');
     if (!name.trim()) {
       setSaveState('Add your name'); setSaveError('Add your full name before saving.'); nameInput.current?.focus();
@@ -409,7 +454,9 @@ export default function Home() {
     }
     setSaveState('Saving…');
     try {
-      await persistProfile({ completed: isCompleted, signature: isCompleted ? currentCompletionSignature : '' });
+      const completed = isCompleted || sameExceptPhotoAdjustment(completedSignature, currentCompletionSignature);
+      await persistProfile({ completed, signature: completed ? currentCompletionSignature : '' });
+      if (completed) setCompletedSignature(currentCompletionSignature);
       setAccountState('signed-in'); setSaveState('Saved ✓');
     } catch (error) { setSaveState('Try again'); setSaveError(error instanceof Error ? error.message : 'Your biodata could not be saved.'); }
     setTimeout(() => setSaveState('Save my biodata'), 2200);
@@ -421,7 +468,7 @@ export default function Home() {
       template,
       photoKey,
       completed: input.completed,
-      details: { profileFields: input.nextFields ?? profileFields, customDesign: input.nextCustomDesign ?? customDesign, finishDesign: input.nextFinishDesign ?? finishDesign, frameStyle: input.nextFrameStyle ?? frameStyle, backgroundStyle: input.nextBackgroundStyle ?? backgroundStyle, colorPreset: input.nextColorPreset ?? colorPreset, customColors: input.nextColors ?? customColors, completionSignature: input.signature, uploadedArtwork: input.nextArtwork ?? uploadedArtwork ?? null },
+      details: { profileFields: input.nextFields ?? profileFields, customDesign: input.nextCustomDesign ?? customDesign, finishDesign: input.nextFinishDesign ?? finishDesign, frameStyle: input.nextFrameStyle ?? frameStyle, backgroundStyle: input.nextBackgroundStyle ?? backgroundStyle, colorPreset: input.nextColorPreset ?? colorPreset, customColors: input.nextColors ?? customColors, completionSignature: input.signature, uploadedArtwork: input.nextArtwork ?? uploadedArtwork ?? null, photoAdjustment: photoAdjustment ?? null },
     }) });
     if (response.status === 401) { window.location.href = `/login?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`; throw new Error('Sign in to continue.'); }
     const data = await response.json().catch(() => ({})) as { error?: string };
@@ -429,6 +476,7 @@ export default function Home() {
   }
   async function downloadCompletedBiodata() {
     setSaveError('');
+    if (photoUploadRequest.current || artworkUploadState === 'uploading') { setSaveError('Wait for the image upload to finish before downloading.'); return; }
     if (accountState !== 'signed-in') { window.location.href = `/login?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
     if (!isCompleted) { setSaveError('Finish the biodata with AI and save the final result before downloading.'); document.getElementById('ai-finish')?.scrollIntoView({ behavior: 'smooth' }); return; }
     setDownloadState('checking');
@@ -583,6 +631,7 @@ export default function Home() {
   }
   async function finishWithAi() {
     if (finishState === 'loading' || finishState === 'saving' || artworkUploadState === 'uploading') return;
+    if (photoUploadRequest.current) { setFinishError('Wait for your profile photo to finish uploading, then try again.'); return; }
     finishRequest.current?.abort();
     const controller = new AbortController(); finishRequest.current = controller;
     const signature = currentCompletionSignature;
@@ -627,7 +676,7 @@ export default function Home() {
       const nextColorPreset = updateManualPalette ? 'custom' as const : colorPreset;
       const nextColors = updateManualPalette ? data.visuals.colors : customColors;
       const nextArtwork = uploadedArtwork && data.visuals.uploadedArtwork ? { ...uploadedArtwork, ...data.visuals.uploadedArtwork } : uploadedArtwork;
-      const signature = completionSignature({ name, about: data.introduction, profileFields: nextFields, template, customDesign: nextCustomDesign, finishDesign: nextFinishDesign, frameStyle: nextFrameStyle, backgroundStyle: nextBackgroundStyle, colorPreset: nextColorPreset, customColors: nextColors, uploadedArtwork: nextArtwork });
+      const signature = completionSignature({ name, about: data.introduction, profileFields: nextFields, template, customDesign: nextCustomDesign, finishDesign: nextFinishDesign, frameStyle: nextFrameStyle, backgroundStyle: nextBackgroundStyle, colorPreset: nextColorPreset, customColors: nextColors, uploadedArtwork: nextArtwork, photoAdjustment });
       // Save successfully before committing any of the AI edits to the editor.
       await persistProfile({ completed: true, signature, nextAbout: data.introduction, nextFields, nextCustomDesign, nextFinishDesign, nextFrameStyle, nextBackgroundStyle, nextColorPreset, nextColors, nextArtwork });
       setAbout(data.introduction); setProfileFields(nextFields);
@@ -679,9 +728,25 @@ export default function Home() {
                 </div>)}
                 <button className="add-detail-button" onClick={() => addField()}><Plus size={15} /> Add another field</button>
               </div>}
-              <div className="mt-7 border-t border-[#29483f15] pt-6"><div className="panel-title"><span>02</span> Photo</div><input ref={fileInput} type="file" accept="image/jpeg,image/png" className="hidden" onChange={(e) => handlePhoto(e.target.files?.[0])} /><button className="upload-box" disabled={photoState === 'uploading'} onClick={() => fileInput.current?.click()}><Upload size={22} /><strong>{photoState === 'uploading' ? 'Uploading photo…' : photoState === 'saved' ? 'Photo uploaded ✓' : 'Upload your photo'}</strong><small>JPG or PNG · Max 5 MB</small></button>{photoError && <p className="ai-error" role="alert">{photoError}</p>}<span className="sr-only" aria-live="polite">{photoState === 'saved' ? 'Photo uploaded successfully.' : ''}</span></div>
+              <div className="mt-7 border-t border-[#29483f15] pt-6"><div className="panel-title"><span>02</span> Your profile photo</div>
+                <p className="mb-3 text-xs leading-5 text-[var(--muted)]">Add your own photo here. Adjust its crop or move the photo frame on your biodata.</p>
+                <input ref={fileInput} aria-label="Upload profile photo" type="file" accept="image/jpeg,image/png" className="hidden" onChange={event => { void handlePhoto(event.target.files?.[0]); event.target.value = ''; }} />
+                <section aria-label="Drop profile photo here" className={`profile-photo-drop ${photoDropActive ? 'drag-active' : ''}`}>
+                  <button type="button" className="upload-box" disabled={photoState === 'uploading'} onClick={() => fileInput.current?.click()} onDragOver={event => { event.preventDefault(); if (photoState !== 'uploading') setPhotoDropActive(true); }} onDragLeave={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setPhotoDropActive(false); }} onDrop={event => { event.preventDefault(); setPhotoDropActive(false); if (event.dataTransfer.files.length > 1) { setPhotoError('Choose one profile photo at a time.'); return; } void handlePhoto(event.dataTransfer.files[0]); }}><Upload size={22} /><strong>{photoState === 'uploading' ? 'Uploading photo…' : photo ? 'Replace your photo' : 'Upload your photo'}</strong><small>Or drag and drop here · JPG or PNG · Max 5 MB</small></button>
+                </section>
+                {photo && <div className="photo-actions"><button type="button" className="soft-button" disabled={photoState === 'uploading'} onClick={openPhotoCrop}>Adjust photo crop</button><button type="button" className="soft-button" disabled={photoState === 'uploading'} onClick={startPhotoMove}>Move photo on biodata</button>{photoAdjustment && <button type="button" className="photo-reset" onClick={() => { setPhotoAdjustment(undefined); setPhotoMoveMode(false); }}>Reset all photo adjustments</button>}<p>Save your biodata to keep photo adjustments for your next login and PDF.</p></div>}
+                {photoError && <p className="ai-error" role="alert">{photoError}</p>}<span className="sr-only" aria-live="polite">{photoState === 'saved' ? 'Photo uploaded successfully.' : ''}</span>
+              </div>
             </aside>
-            <section className="preview-shell"><div className="preview-toolbar print:hidden"><span className="flex items-center gap-2 text-sm font-bold"><span className="live-dot" /> Live preview</span><span className="text-xs text-[var(--muted)]">{active.name} · A4</span></div><BiodataPaper template={template} photo={photo} name={name} about={about} fields={profileFields} design={template === 'ai-custom' ? customDesign : finishDesign} uploadedArtwork={uploadedArtwork} frameStyle={frameStyle} backgroundStyle={backgroundStyle} colorOverride={activeColorOverride} /></section>
+            <section className="preview-shell"><div className="preview-toolbar print:hidden"><span className="flex items-center gap-2 text-sm font-bold"><span className="live-dot" /> Live preview</span><span className="text-xs text-[var(--muted)]">{active.name} · A4</span></div>
+              {photoMoveMode && photoAdjustment?.placement && <section className="photo-position-toolbar print:hidden" aria-label="Profile photo position controls"><strong>Drag your photo to position it</strong><p>Drag with your mouse or finger. Arrow keys move the selected photo; Shift moves faster. Keep it clear of your details.</p>
+                <label htmlFor="profile-frame-size">Photo size on biodata <output>{Math.round(photoAdjustment.placement.width)}%</output><input id="profile-frame-size" type="range" min="10" max="45" step="0.1" value={photoAdjustment.placement.width} onChange={event => { const width = Number(event.target.value); setPhotoAdjustment(current => current?.placement ? { ...current, placement: resizePhoto(current.placement, width) } : current); }} /></label>
+                <label>Photo left / right<input type="range" min="0" max={100 - photoAdjustment.placement.width} step="0.1" value={photoAdjustment.placement.x} onChange={event => { const x = Number(event.target.value); setPhotoAdjustment(current => current?.placement ? { ...current, placement: boundPhotoPlacement({ ...current.placement, x }) } : current); }} /></label>
+                <label>Photo up / down<input type="range" min="0" max={100 - photoAdjustment.placement.width * 210 / 297} step="0.1" value={photoAdjustment.placement.y} onChange={event => { const y = Number(event.target.value); setPhotoAdjustment(current => current?.placement ? { ...current, placement: boundPhotoPlacement({ ...current.placement, y }) } : current); }} /></label>
+                <div className="flex flex-wrap gap-2"><button type="button" className="primary-button" onClick={() => setPhotoMoveMode(false)}>Done positioning</button><button type="button" className="soft-button" onClick={() => { setPhotoAdjustment(current => current ? { crop: current.crop } : undefined); setPhotoMoveMode(false); }}>Reset photo position</button></div>
+              </section>}
+              <BiodataPaper template={template} photo={photo} name={name} about={about} fields={profileFields} design={template === 'ai-custom' ? customDesign : finishDesign} uploadedArtwork={uploadedArtwork} photoAdjustment={photoAdjustment} onPhotoPlacementChange={photoMoveMode ? placement => setPhotoAdjustment(current => ({ crop: current?.crop || { ...defaultPhotoCrop }, placement })) : undefined} onPhotoMoveEnd={() => setPhotoMoveMode(false)} frameStyle={frameStyle} backgroundStyle={backgroundStyle} colorOverride={activeColorOverride} />
+            </section>
             <aside className="editor-panel print:hidden" id="templates">
               <div className="panel-title"><span>03</span> Choose a style</div>
               <div className="space-y-3">{quickTemplates.map((item) => <button key={item.id} aria-pressed={template === item.id} onClick={() => selectTemplate(item.id)} className={`template-option ${template === item.id ? 'active' : ''}`}><span className={`mini-paper ${item.id}`} style={templatePreviewStyle(item.id, customDesign)}><i /><b /></span><span className="text-left"><strong>{item.name}</strong><small>{item.note}</small></span>{template === item.id && <Check className="ml-auto" size={18} />}</button>)}</div>
@@ -724,6 +789,7 @@ export default function Home() {
 
       <footer id="languages" className="border-t border-[#29483f18] px-5 py-8 text-sm text-[var(--muted)]"><div className="mx-auto flex max-w-[1320px] flex-wrap items-start justify-between gap-4"><span className="flex items-center gap-2 font-serif text-lg font-bold text-[var(--ink)]"><span className="logo-mark small">ज</span> JeevanPatra</span><p>Your saved biodata is private to your account. AI receives only the information needed for the edit you request.</p><div className="footer-help"><details><summary>Privacy</summary><p>Your profile is account-private. AI finishing receives your introduction and field labels. The AI field builder receives only the text you paste into it.</p></details><details><summary>Help</summary><p>Choose a template, add any fields you need, preview the result, then download PDF or save after signing in.</p></details><details><summary>Languages</summary><p>You can write labels and values in English, हिंदी, मराठी, or another language.</p></details></div></div></footer>
 
+      {photoCropOpen && <Modal label="Adjust profile photo crop" onClose={() => setPhotoCropOpen(false)}><h2 className="font-serif text-3xl">Frame your photo</h2><p className="mt-2 text-sm text-[var(--muted)]">Adjust only your profile picture. Your background and other design elements stay in place.</p><PhotoCropEditor src={photo} crop={photoCropDraft} radius={photoCropRadius} onChange={setPhotoCropDraft} /><div className="mt-5 flex flex-wrap gap-2"><button type="button" className="primary-button" onClick={() => { setPhotoAdjustment(current => ({ ...current, crop: photoCropDraft })); setPhotoCropOpen(false); }}>Apply photo crop</button><button type="button" className="soft-button" onClick={() => setPhotoCropOpen(false)}>Cancel crop</button></div></Modal>}
       {aiOpen && <Modal label="Improve your introduction with Groq AI" onClose={() => setAiOpen(false)}><div className="modal-icon"><WandSparkles /></div><p className="eyebrow mx-auto w-fit">Powered by Groq AI</p><h2 className="mt-4 text-center font-serif text-3xl">Find the words that feel like you.</h2><p className="mt-3 text-center text-sm leading-6 text-[var(--muted)]">We’ll keep your meaning, match your chosen tone, and never invent personal facts.</p><div className="mt-6 rounded-2xl bg-[#f5f0e6] p-4 text-sm leading-6 text-[var(--muted)]">“{about}”</div><fieldset className="mt-5 grid grid-cols-3 gap-2 border-0 p-0 text-xs font-bold"><legend className="sr-only">Writing tone</legend>{(['warm', 'concise', 'traditional'] as AiTone[]).map((tone) => <button key={tone} type="button" aria-pressed={aiTone === tone} className={`tone ${aiTone === tone ? 'active' : ''}`} onClick={() => setAiTone(tone)}>{tone[0].toUpperCase() + tone.slice(1)}</button>)}</fieldset>{aiError && <p className="ai-error" role="alert">{aiError}</p>}<button className="primary-button mt-6 w-full justify-center py-3.5" onClick={improveBio} disabled={aiState === 'loading'}><Sparkles size={17} /> {aiState === 'loading' ? 'Writing with Groq…' : `Rewrite · ${aiTone[0].toUpperCase() + aiTone.slice(1)}`}</button></Modal>}
       {fieldBuilderOpen && <Modal label="Create editable fields with Groq AI" onClose={() => setFieldBuilderOpen(false)} wide>
         <div className="modal-icon"><ListPlus /></div>
