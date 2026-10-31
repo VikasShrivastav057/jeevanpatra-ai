@@ -8,11 +8,12 @@ import { builtInTemplateIds, getTemplateById, templateCatalog, type TemplateId }
 import { readApiResponse } from '../../lib/read-api-response';
 import { printBiodata } from '../../lib/print-biodata';
 import { isUploadedArtwork, type UploadedArtwork } from '../../lib/uploaded-artwork';
+import type { FinishResult } from '../../lib/finishing-plan';
 import { BiodataPaper, type BackgroundStyle, type FieldSection, type FrameStyle, type ProfileField, type TemplateColors, type TemplateDesign } from '../../components/biodata-paper';
 
 type AiTone = 'warm' | 'concise' | 'traditional';
 type ColorPresetId = 'template' | 'maroon' | 'emerald' | 'navy' | 'rose' | 'purple' | 'teal' | 'custom';
-type FinishChangeTarget = 'layout' | 'colors' | 'typography' | 'photo' | 'border' | 'spacing' | 'sections' | 'header';
+type FinishChangeTarget = 'layout' | 'colors' | 'typography' | 'photo' | 'border' | 'spacing' | 'sections' | 'header' | 'introduction';
 type FinishImprovementMode = 'requested-only' | 'balanced' | 'best-version';
 const templates: { id: TemplateId; name: string; note: string }[] = templateCatalog.map((item) => ({ id: item.id, name: item.name, note: item.editorNote }));
 const initialFields: ProfileField[] = [
@@ -69,6 +70,7 @@ const finishChangeOptions: { id: FinishChangeTarget; label: string; note: string
   { id: 'spacing', label: 'Spacing', note: 'Balance and readability' },
   { id: 'sections', label: 'Sections', note: 'Order and grouping' },
   { id: 'header', label: 'Header', note: 'Name and blessing style' },
+  { id: 'introduction', label: 'Introduction', note: 'Polish your own paragraph' },
 ];
 const finishImprovementOptions: { id: FinishImprovementMode; label: string; note: string }[] = [
   { id: 'requested-only', label: 'Only my changes', note: 'Keep everything else exactly as it is.' },
@@ -187,9 +189,12 @@ export default function Home() {
   const [stylePreference, setStylePreference] = useState('Traditional');
   const [styleRecommendation, setStyleRecommendation] = useState('Elegant, balanced and family-friendly. Keep every fact accurate and make the page easy to read.');
   const [finishChangeTargets, setFinishChangeTargets] = useState<FinishChangeTarget[]>(['layout', 'colors', 'typography', 'spacing']);
-  const [finishImprovementMode, setFinishImprovementMode] = useState<FinishImprovementMode>('balanced');
-  const [finishState, setFinishState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [finishImprovementMode, setFinishImprovementMode] = useState<FinishImprovementMode>('requested-only');
+  const [finishState, setFinishState] = useState<'idle' | 'loading' | 'saving' | 'error'>('idle');
   const [finishError, setFinishError] = useState('');
+  const [finishReview, setFinishReview] = useState<{ result: FinishResult; signature: string; requestKey: string }>();
+  const [lastFinishChanges, setLastFinishChanges] = useState<string[]>([]);
+  const finishRequest = useRef<AbortController | undefined>(undefined);
   const [uploadedArtwork, setUploadedArtwork] = useState<UploadedArtwork>();
   const [artworkUploadState, setArtworkUploadState] = useState<'idle' | 'uploading' | 'error'>('idle');
   const [artworkUploadError, setArtworkUploadError] = useState('');
@@ -220,6 +225,11 @@ export default function Home() {
     return colorPresets.find((option) => option.id === colorPreset)?.colors;
   }, [colorPreset, customColors]);
   const currentCompletionSignature = useMemo(() => completionSignature({ name, about, profileFields, template, customDesign, finishDesign, frameStyle, backgroundStyle, colorPreset, customColors, uploadedArtwork }), [about, backgroundStyle, colorPreset, customColors, customDesign, finishDesign, frameStyle, name, profileFields, template, uploadedArtwork]);
+  const latestFinishSignature = useRef(currentCompletionSignature);
+  latestFinishSignature.current = currentCompletionSignature;
+  const finishRequestKey = JSON.stringify({ styleRecommendation, stylePreference, finishChangeTargets, finishImprovementMode });
+  const currentFinishReview = finishReview?.signature === currentCompletionSignature && finishReview.requestKey === finishRequestKey ? finishReview : undefined;
+  useEffect(() => () => finishRequest.current?.abort(), []);
   const isCompleted = Boolean(completedSignature && completedSignature === currentCompletionSignature);
 
   useEffect(() => {
@@ -404,14 +414,14 @@ export default function Home() {
     } catch (error) { setSaveState('Try again'); setSaveError(error instanceof Error ? error.message : 'Your biodata could not be saved.'); }
     setTimeout(() => setSaveState('Save my biodata'), 2200);
   }
-  async function persistProfile(input: { completed: boolean; signature: string; nextAbout?: string; nextFields?: ProfileField[]; nextCustomDesign?: TemplateDesign; nextFinishDesign?: TemplateDesign }) {
+  async function persistProfile(input: { completed: boolean; signature: string; nextAbout?: string; nextFields?: ProfileField[]; nextCustomDesign?: TemplateDesign; nextFinishDesign?: TemplateDesign; nextFrameStyle?: FrameStyle; nextBackgroundStyle?: BackgroundStyle; nextColorPreset?: ColorPresetId; nextColors?: TemplateColors; nextArtwork?: UploadedArtwork }) {
     const response = await fetch('/api/biodata', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
       name,
       introduction: input.nextAbout ?? about,
       template,
       photoKey,
       completed: input.completed,
-      details: { profileFields: input.nextFields ?? profileFields, customDesign: input.nextCustomDesign ?? customDesign, finishDesign: input.nextFinishDesign ?? finishDesign, frameStyle, backgroundStyle, colorPreset, customColors, completionSignature: input.signature, uploadedArtwork: uploadedArtwork ?? null },
+      details: { profileFields: input.nextFields ?? profileFields, customDesign: input.nextCustomDesign ?? customDesign, finishDesign: input.nextFinishDesign ?? finishDesign, frameStyle: input.nextFrameStyle ?? frameStyle, backgroundStyle: input.nextBackgroundStyle ?? backgroundStyle, colorPreset: input.nextColorPreset ?? colorPreset, customColors: input.nextColors ?? customColors, completionSignature: input.signature, uploadedArtwork: input.nextArtwork ?? uploadedArtwork ?? null },
     }) });
     if (response.status === 401) { window.location.href = `/login?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`; throw new Error('Sign in to continue.'); }
     const data = await response.json().catch(() => ({})) as { error?: string };
@@ -572,19 +582,34 @@ export default function Home() {
     } catch (error) { setArtworkUploadState('error'); setArtworkUploadError(error instanceof Error ? error.message : 'Your image could not be uploaded.'); }
   }
   async function finishWithAi() {
-    setFinishState('loading'); setFinishError('');
+    if (finishState === 'loading' || finishState === 'saving' || artworkUploadState === 'uploading') return;
+    finishRequest.current?.abort();
+    const controller = new AbortController(); finishRequest.current = controller;
+    const signature = currentCompletionSignature;
+    setFinishState('loading'); setFinishError(''); setFinishReview(undefined);
     try {
-      const fieldSummary = profileFields.map(({ id, label, section, value }) => ({ id, label, section, hasValue: Boolean(value.trim()) }));
-      const selectedAreas = finishChangeOptions.filter((option) => finishChangeTargets.includes(option.id)).map((option) => option.label);
-      const improvementInstruction = finishImprovementOptions.find((option) => option.id === finishImprovementMode)?.note || '';
-      const finishingRecommendation = [
-        styleRecommendation.trim(),
-        selectedAreas.length ? `Change these specific areas: ${selectedAreas.join(', ')}.` : 'Do not change the visual design unless needed to follow the written instruction.',
-        `Improvement approach: ${improvementInstruction}`,
-      ].filter(Boolean).join(' ');
-      const response = await fetch('/api/ai/finalize', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, introduction: about, fields: fieldSummary, stylePreference, recommendation: finishingRecommendation, currentTemplate: `${template}: ${active.name}`, currentDesign: finishDesign || customDesign }) });
-      const data = await readApiResponse<{ introduction?: string; fieldOrder?: string[]; design?: TemplateDesign; fieldUpdates?: Array<{ id: string; label?: string; section?: FieldSection; group?: string }> }>(response, 'AI could not finish this biodata.');
-      if (!response.ok || typeof data.introduction !== 'string' || !data.fieldOrder || !data.design) throw new Error(data.error || 'AI could not finish this biodata.');
+      const fieldSummary = profileFields.map(({ id, label, section, group, value }) => ({ id, label, section, group, hasValue: Boolean(value.trim()) }));
+      const theme = getTemplateById(template)?.theme;
+      const activeDesign = template === 'ai-custom' ? customDesign : finishDesign;
+      const currentColors = activeColorOverride || activeDesign || theme || defaultCustomColors;
+      const response = await fetch('/api/ai/finalize', { method: 'POST', signal: controller.signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, introduction: about, fields: fieldSummary, stylePreference, recommendation: styleRecommendation.trim(), changeTargets: finishChangeTargets, improvementMode: finishImprovementMode, currentTemplate: template, currentDesign: activeDesign, currentVisuals: { frameStyle, backgroundStyle, colors: { primary: currentColors.primary, accent: currentColors.accent, paper: currentColors.paper, text: currentColors.text }, ...(uploadedArtwork ? { uploadedArtwork: { placement: uploadedArtwork.placement, size: uploadedArtwork.size } } : {}) } }) });
+      const data = await readApiResponse<FinishResult>(response, 'AI could not prepare these changes.');
+      if (finishRequest.current !== controller || controller.signal.aborted) return;
+      if (latestFinishSignature.current !== signature) throw new Error('Your biodata changed while AI was working. Generate a fresh plan; nothing was applied.');
+      if (!response.ok || typeof data.introduction !== 'string' || !Array.isArray(data.fieldOrder) || !isTemplateDesign(data.design) || !Array.isArray(data.changes) || !data.visuals) throw new Error(data.error || 'AI could not prepare verified changes. Nothing was applied.');
+      setFinishReview({ result: data, signature, requestKey: finishRequestKey }); setFinishState('idle');
+    } catch (error) { if (!controller.signal.aborted && finishRequest.current === controller) { setFinishState('error'); setFinishError(error instanceof Error ? error.message : 'Nothing was changed. Please retry.'); } }
+  }
+  function closeFinishing() {
+    if (finishState === 'saving') return;
+    finishRequest.current?.abort(); finishRequest.current = undefined;
+    setFinishOpen(false); setFinishReview(undefined); setFinishState('idle'); setFinishError('');
+  }
+  async function applyReviewedFinish() {
+    if (!currentFinishReview || finishState === 'saving') return;
+    setFinishState('saving'); setFinishError('');
+    try {
+      const data = currentFinishReview.result;
       const fieldById = new Map(profileFields.map((field) => [field.id, field]));
       const reordered = data.fieldOrder.map((id) => fieldById.get(id)).filter((field): field is ProfileField => Boolean(field));
       const untouched = profileFields.filter((field) => !data.fieldOrder!.includes(field.id));
@@ -594,8 +619,19 @@ export default function Home() {
       });
       const nextCustomDesign = template === 'ai-custom' ? data.design : customDesign;
       const nextFinishDesign = template === 'ai-custom' ? undefined : data.design;
-      const signature = completionSignature({ name, about: data.introduction, profileFields: nextFields, template, customDesign: nextCustomDesign, finishDesign: nextFinishDesign, frameStyle, backgroundStyle, colorPreset, customColors, uploadedArtwork });
+      const nextFrameStyle = data.visuals.frameStyle;
+      const nextBackgroundStyle = data.visuals.backgroundStyle;
+      const colorsChanged = data.changes.some(change => /^design\.(primary|accent|paper|text):/.test(change.target));
+      // Keep original gradient paper when only a heading/text colour changes.
+      const updateManualPalette = colorsChanged && colorPreset !== 'template';
+      const nextColorPreset = updateManualPalette ? 'custom' as const : colorPreset;
+      const nextColors = updateManualPalette ? data.visuals.colors : customColors;
+      const nextArtwork = uploadedArtwork && data.visuals.uploadedArtwork ? { ...uploadedArtwork, ...data.visuals.uploadedArtwork } : uploadedArtwork;
+      const signature = completionSignature({ name, about: data.introduction, profileFields: nextFields, template, customDesign: nextCustomDesign, finishDesign: nextFinishDesign, frameStyle: nextFrameStyle, backgroundStyle: nextBackgroundStyle, colorPreset: nextColorPreset, customColors: nextColors, uploadedArtwork: nextArtwork });
+      // Save successfully before committing any of the AI edits to the editor.
+      await persistProfile({ completed: true, signature, nextAbout: data.introduction, nextFields, nextCustomDesign, nextFinishDesign, nextFrameStyle, nextBackgroundStyle, nextColorPreset, nextColors, nextArtwork });
       setAbout(data.introduction); setProfileFields(nextFields);
+      setFrameStyle(nextFrameStyle); setBackgroundStyle(nextBackgroundStyle); setColorPreset(nextColorPreset); setCustomColors(nextColors); setUploadedArtwork(nextArtwork);
       if (template === 'ai-custom') {
         setCustomDesign(data.design);
         setFinishDesign(undefined);
@@ -603,11 +639,10 @@ export default function Home() {
       } else {
         setFinishDesign(data.design);
       }
-      await persistProfile({ completed: true, signature, nextAbout: data.introduction, nextFields, nextCustomDesign, nextFinishDesign });
       setCompletedSignature(signature); setSaveState('Completed & saved ✓');
-      setFinishState('idle'); setFinishOpen(false);
+      setLastFinishChanges(data.changes.map(change => change.label)); setFinishReview(undefined); setFinishState('idle'); setFinishOpen(false);
       document.querySelector('.preview-shell')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } catch (error) { setFinishState('error'); setFinishError(error instanceof Error ? error.message : 'Something went wrong.'); }
+    } catch (error) { setFinishState('error'); setFinishError(error instanceof Error ? error.message : 'The changes could not be saved. Your biodata is unchanged.'); }
   }
 
   if (!draftReady) return <main className="grid min-h-screen place-items-center bg-[var(--cream)] px-6 text-[var(--ink)]" aria-busy="true"><output className="block text-center"><span className="logo-mark mx-auto">ज</span><h1 className="mt-5 font-serif text-3xl">Preparing your selected design…</h1><p className="mt-2 text-sm text-[var(--muted)]">Restoring your details and template.</p></output></main>;
@@ -683,7 +718,7 @@ export default function Home() {
             </aside>
           </div>
           <div className="ai-field-builder-card print:hidden"><div><span className="finish-number">07</span><div><p className="eyebrow"><ListPlus size={14} /> AI field builder</p><h2>Turn your sentences into editable fields.</h2><p>Paste partner preferences or any other details. AI will separate them into field names and values for you to review before anything is added to the template.</p></div></div><button className="soft-button" onClick={() => { setFieldBuilderError(''); setFieldBuilderOpen(true); }}>Create fields with AI <Sparkles size={17} /></button></div>
-          <div id="ai-finish" className="ai-finish-card print:hidden"><div><span className="finish-number">08</span><div><p className="eyebrow"><Sparkles size={14} /> Final step</p><h2>Let AI finish the complete biodata.</h2><p>Choose Old Style, Modern, Traditional, Minimal or write your own recommendation. AI will refine the introduction, organize fields and create matching fonts, colors and layout without changing your facts.</p></div></div><button className="primary-button" onClick={() => setFinishOpen(true)}>Finish my biodata <WandSparkles size={17} /></button></div>
+          <div id="ai-finish" className="ai-finish-card print:hidden"><div><span className="finish-number">08</span><div><p className="eyebrow"><Sparkles size={14} /> Final step</p><h2>Let AI finish the complete biodata.</h2><p>Describe your changes, review the exact edits, then save. Your other settings and personal facts stay protected.</p>{lastFinishChanges.length > 0 && <output className="mt-2 block text-xs">Saved changes: {lastFinishChanges.join(', ')}.</output>}</div></div><button className="primary-button" onClick={() => setFinishOpen(true)}>Finish my biodata <WandSparkles size={17} /></button></div>
         </div>
       </section>
 
@@ -715,11 +750,13 @@ export default function Home() {
         {designError && <p className="ai-error" role="alert">{designError}</p>}
         <button className="primary-button mt-6 w-full justify-center py-3.5" onClick={createAiDesign} disabled={designState === 'loading' || (!designIdea.trim() && !designReference)}><WandSparkles size={17} /> {designState === 'loading' ? 'Studying and designing…' : designReference ? 'Create from this reference' : 'Create my template'}</button>
       </Modal>}
-      {finishOpen && <Modal label="AI finishing studio" onClose={() => setFinishOpen(false)} wide>
+      {finishOpen && <Modal label="AI finishing studio" onClose={closeFinishing} busy={finishState === 'saving'} wide>
         <div className="modal-icon"><Sparkles /></div>
         <p className="eyebrow mx-auto w-fit">AI finishing studio</p>
         <h2 className="mt-4 text-center font-serif text-3xl">What should AI improve?</h2>
-        <p className="mt-3 text-center text-sm leading-6 text-[var(--muted)]">Choose the exact parts you want changed. AI will keep every supplied fact and follow your instruction.</p>
+        <p className="mt-3 text-center text-sm leading-6 text-[var(--muted)]">Describe exactly what to change. Review the proposed edits before saving; everything else stays as it is.</p>
+        <p className="mt-2 text-center text-xs leading-5 text-[var(--muted)]">Change text, fonts, colours, spacing, editable borders, field labels and grouping, or your uploaded image size and placement. Illustrated artwork has fixed parts; AI will explain when a request needs another template or an uploaded image.</p>
+        <fieldset disabled={finishState === 'loading' || finishState === 'saving'} className="m-0 border-0 p-0">
         <div className="finish-studio-grid mt-6">
           <div>
             <label className="field-label mt-0">Overall style<select value={stylePreference} onChange={(event) => setStylePreference(event.target.value)}><option>Traditional</option><option>Old Style</option><option>Modern</option><option>Contemporary</option><option>Minimal</option><option>Royal</option><option>Custom</option></select></label>
@@ -745,7 +782,7 @@ export default function Home() {
                 </label>)}
               </div>
             </fieldset>
-            <label className="field-label">Describe the exact change<textarea rows={5} maxLength={800} value={styleRecommendation} onChange={(event) => setStyleRecommendation(event.target.value)} placeholder="Example: Keep the Radha Krishna artwork. Put my name beneath Radha Krishna on the right, use a larger traditional serif font, and reduce empty space between sections." /></label>
+            <label className="field-label">Describe the exact change<textarea rows={5} maxLength={1200} value={styleRecommendation} onChange={(event) => setStyleRecommendation(event.target.value)} placeholder={'Example: Replace “ॐ नमः शिवाय” with “Jai Shri RadhaKrishna”. Keep the images, colours, fonts and fields unchanged.'} /></label>
             {template === 'mahadev-parvati-devotional' && <div className="mt-3 text-xs leading-5 text-[var(--muted)]"><p>Devotional artwork: original Mahadev–Parvati, add Radha Krishna opposite them, or replace only the divine couple.</p><button type="button" className="soft-button mt-2" onClick={() => setStyleRecommendation('Add a Radha Krishna image opposite Mahadev and Mata Parvati. Keep both divine images balanced, elegant and devotional. Preserve my photo, name and details. Keep the current colours and fonts.')}>Add Radha Krishna opposite Mahadev</button><button type="button" className="soft-button mt-2" onClick={() => { setFinishImprovementMode('requested-only'); setStyleRecommendation('Only replace the Mahadev and Parvati image with Radha Krishna. Maintain the same image position, size and decorative feel. Do not change any other section, text, theme, colours or layout.'); }}>Replace Mahadev–Parvati with Radha Krishna</button><button type="button" className="mt-2 block underline" onClick={() => setStyleRecommendation('Remove Radha Krishna and keep the original Mahadev and Mata Parvati artwork. Keep my other design settings.')}>Use original artwork</button></div>}
           </div>
         </div>
@@ -765,18 +802,26 @@ export default function Home() {
           {artworkUploadError && <p className="ai-error" role="alert">{artworkUploadError}</p>}
           <span className="sr-only" aria-live="polite">{artworkUploadState === 'uploading' ? 'Uploading artwork' : uploadedArtwork ? 'Artwork ready in preview' : ''}</span>
         </section>
+        </fieldset>
         <p className="privacy-note">Your uploaded image is stored privately with your account and included in the biodata and PDF. It is not sent to Groq. Your visual choices, introduction and field labels are sent to Groq; other field values are not sent.</p>
+        {currentFinishReview && <section className="finish-review" aria-label="Review proposed changes" aria-live="polite">
+          <h3 className="font-serif text-2xl">Review the exact changes</h3>
+          <p className="mt-2 text-xs leading-5">{currentFinishReview.result.changes.length ? 'Only the changes listed below will be applied. Your template, photo file and field values are preserved.' : 'Your settings already match this request. No content or design changes are proposed; you can save the completed biodata.'}</p>
+          {currentFinishReview.result.changes.length > 0 && <div className="finish-review-list">{currentFinishReview.result.changes.map(change => <div key={change.target}><strong>{change.label}</strong><dl><div><dt>Current</dt><dd>{change.before || '(empty)'}</dd></div><div><dt>Proposed</dt><dd>{change.after || '(empty)'}</dd></div></dl></div>)}</div>}
+          <div className="mt-4 flex flex-wrap gap-3"><button className="primary-button" disabled={finishState === 'saving'} onClick={() => void applyReviewedFinish()}>{finishState === 'saving' ? 'Saving verified changes…' : 'Apply these changes & save'}</button><button className="soft-button" disabled={finishState === 'saving'} onClick={() => { setFinishReview(undefined); setFinishError(''); }}>Discard proposed changes</button></div>
+        </section>}
+        {finishReview && !currentFinishReview && <output className="privacy-note block">Your instructions or biodata changed. Review a fresh plan before applying it.</output>}
         {finishError && <p className="ai-error" role="alert">{finishError}</p>}
-        <button className="primary-button mt-6 w-full justify-center py-3.5" onClick={finishWithAi} disabled={finishState === 'loading' || artworkUploadState === 'uploading'}><Sparkles size={17} /> {finishState === 'loading' ? 'Creating the final biodata…' : 'Apply my choices with AI'}</button>
+        {!currentFinishReview && <button className="primary-button mt-6 w-full justify-center py-3.5" onClick={finishWithAi} disabled={finishState === 'loading' || finishState === 'saving' || artworkUploadState === 'uploading'}><Sparkles size={17} /> {finishState === 'loading' ? 'Checking your requested edits…' : 'Review changes with AI'}</button>}
       </Modal>}
     </main>
   );
 }
 
-function Modal({ children, onClose, label, wide = false }: { children: React.ReactNode; onClose: () => void; label: string; wide?: boolean }) {
+function Modal({ children, onClose, label, wide = false, busy = false }: { children: React.ReactNode; onClose: () => void; label: string; wide?: boolean; busy?: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => { if (dialog.current && !dialog.current.open) dialog.current.showModal(); }, []);
   function close() { if (dialog.current?.open) dialog.current.close(); else onClose(); }
-  return <dialog ref={dialog} className={`modal-card ${wide ? 'wide' : ''}`} aria-label={label} aria-modal="true" onClose={onClose}><button className="modal-close" onClick={close} aria-label="Close dialog"><X size={18} /></button>{children}</dialog>;
+  return <dialog ref={dialog} className={`modal-card ${wide ? 'wide' : ''}`} aria-label={label} aria-modal="true" onCancel={event => { if (busy) event.preventDefault(); }} onClose={onClose}><button className="modal-close" disabled={busy} onClick={close} aria-label="Close dialog"><X size={18} /></button>{children}</dialog>;
 }
 

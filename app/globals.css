@@ -291,6 +291,26 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none!important}
 
 /* AI-created border shapes. A manual frame choice below takes precedence. */
 .bio-paper.design-rounded:before{border-radius:7%}
+.bio-paper.name-large .bio-header h2{font-size:clamp(20px,4.8cqw,38px)!important}
+.bio-paper.name-small .bio-header h2{font-size:clamp(13px,2.8cqw,23px)!important}
+.bio-paper.template-themed.font-modern,.bio-paper.template-themed.font-modern :is(h2,h3,.bio-blessing,.bio-header p){font-family:var(--font-sans)!important}
+.bio-paper.template-themed.font-classic,.bio-paper.template-themed.font-classic :is(h2,h3,.bio-blessing,.bio-header p){font-family:var(--font-serif)!important}
+.bio-paper.template-themed.font-traditional,.bio-paper.template-themed.font-traditional :is(h2,h3,.bio-blessing,.bio-header p){font-family:Georgia,'Times New Roman',serif!important}
+.bio-paper.photo-circle .portrait-frame{border-radius:50%!important}.bio-paper.photo-rounded .portrait-frame{border-radius:20%!important}.bio-paper.photo-square .portrait-frame{border-radius:2%!important}
+.bio-paper.density-compact .bio-sections{gap:1.25cqw 4%!important}.bio-paper.density-compact dl div{padding:.55% 0!important;line-height:1.16!important}
+.bio-paper.density-airy .bio-sections{gap:3.2cqw 6%!important}.bio-paper.density-airy dl div{padding:1.45% 0!important;line-height:1.42!important}
+.bio-paper.color-primary :is(h2,h3,.bio-blessing,.bio-contact strong){color:var(--active-primary)!important}
+.bio-paper.color-text :is(dt,dd,.bio-contact span,.bio-header p){color:var(--active-text)!important}
+.bio-paper.color-accent .portrait-frame{outline-color:var(--active-accent)!important}
+.bio-paper.color-paper{background-color:var(--active-paper)!important}
+.finish-review{margin-top:22px;padding:18px;border:1px solid #b8d4c9;border-radius:16px;background:#f1f8f4}
+.finish-review-list{display:grid;gap:12px;margin-top:16px}
+.finish-review-list>div{min-width:0;padding:12px;border:1px solid #29483f22;border-radius:10px;background:white}
+.finish-review-list strong{font-size:13px}
+.finish-review-list dl{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:8px 0 0;font-size:12px;line-height:1.5}
+.finish-review-list dt{font-weight:700;color:#5f756c}
+.finish-review-list dd{margin:3px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:540px){.finish-review-list dl{grid-template-columns:1fr}.finish-review{padding:13px}}
 .bio-paper.design-oval:before{border-radius:50%/18%}
 .bio-paper.design-circle:before{inset:auto;top:8%;left:9%;width:82%;height:auto;aspect-ratio:1;border-radius:50%}
 .bio-paper.design-double:before{border-width:6px;border-style:double;box-shadow:none}

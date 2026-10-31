@@ -10,7 +10,7 @@ export type BorderStyle = 'classic' | 'floral' | 'arch' | 'minimal' | 'rounded' 
 export type FrameStyle = 'template' | 'square' | 'rounded' | 'arch' | 'oval' | 'circle' | 'double';
 export type BackgroundStyle = 'template' | 'plain' | 'parchment' | 'dots' | 'geometric' | 'weave' | 'radiant';
 export type TemplateColors = { paper: string; primary: string; accent: string; text: string };
-export type TemplateDesign = { name: string; note: string; primary: string; accent: string; paper: string; text: string; borderStyle: BorderStyle; photoShape: 'circle' | 'rounded' | 'square'; layout: 'classic' | 'portrait-top'; fontStyle: 'classic' | 'modern' | 'traditional'; blessing: string; blessingOverride?: string; density?: 'compact' | 'balanced' | 'airy'; artwork?: DevotionalArtwork };
+export type TemplateDesign = { name: string; note: string; primary: string; accent: string; paper: string; text: string; borderStyle: BorderStyle; photoShape: 'circle' | 'rounded' | 'square'; layout: 'classic' | 'portrait-top'; fontStyle: 'classic' | 'modern' | 'traditional'; blessing: string; blessingOverride?: string; density?: 'compact' | 'balanced' | 'airy'; artwork?: DevotionalArtwork; nameSize?: 'small' | 'normal' | 'large'; editedProperties?: string[] };
 
 export function BiodataPaper({ template, photo, name, about, fields, design, uploadedArtwork, frameStyle = 'template', backgroundStyle = 'template', colorOverride, compact = false }: { template: TemplateId; photo: string; name: string; about: string; fields: ProfileField[]; design?: TemplateDesign; uploadedArtwork?: UploadedArtwork; frameStyle?: FrameStyle; backgroundStyle?: BackgroundStyle; colorOverride?: TemplateColors; compact?: boolean }) {
   const personal = fields.filter((field) => field.section === 'personal' && field.label.trim() && field.value.trim());
@@ -21,14 +21,16 @@ export function BiodataPaper({ template, photo, name, about, fields, design, upl
   const isAiTemplate = template === 'ai-custom' && design !== undefined;
   const isAiFinished = template !== 'ai-custom' && design !== undefined;
   const activeColors = colorOverride || (design ? { paper: design.paper, primary: design.primary, accent: design.accent, text: design.text } : undefined) || (baseTemplate ? { paper: baseTemplate.theme.paper, primary: baseTemplate.theme.primary, accent: baseTemplate.theme.accent, text: baseTemplate.theme.text } : design ? { paper: design.paper, primary: design.primary, accent: design.accent, text: design.text } : { paper: '#fffdf8', primary: '#8f3d2f', accent: '#c79a45', text: '#493b34' });
-  const activeVariables = { '--uploaded-artwork-height': uploadedArtwork?.size === 'small' ? '12cqw' : uploadedArtwork?.size === 'large' ? '25cqw' : '18cqw', '--active-paper': activeColors.paper, '--active-primary': activeColors.primary, '--active-accent': activeColors.accent, '--active-text': activeColors.text };
+  const activeVariables = { '--uploaded-artwork-height': uploadedArtwork?.size === 'small' ? '12cqw' : uploadedArtwork?.size === 'large' ? '25cqw' : '18cqw', '--active-paper': activeColors.paper.match(/#[\da-f]{6}/i)?.[0] || '#fffaf0', '--active-primary': activeColors.primary, '--active-accent': activeColors.accent, '--active-text': activeColors.text };
   const style = baseTemplate
     ? ({ ...activeVariables, '--template-paper': activeColors.paper, '--template-primary': activeColors.primary, '--template-accent': activeColors.accent, '--template-text': activeColors.text, '--template-muted': colorOverride ? `color-mix(in srgb, ${activeColors.text} 72%, ${activeColors.paper})` : baseTemplate.theme.muted, '--template-contact': colorOverride ? `color-mix(in srgb, ${activeColors.accent} 12%, ${activeColors.paper})` : baseTemplate.theme.contact } as CSSProperties)
     : isAiTemplate
       ? ({ ...activeVariables, '--design-primary': activeColors.primary, '--design-accent': activeColors.accent, '--design-paper': activeColors.paper, '--design-text': activeColors.text } as CSSProperties)
       : (activeVariables as CSSProperties);
   const artworkClass = template === 'mahadev-parvati-devotional' && (design?.artwork === 'mahadev-radha-krishna' || design?.artwork === 'radha-krishna-replacement') ? `artwork-${design.artwork}` : '';
-  const designClasses = design ? `design-${design.borderStyle} photo-${design.photoShape} layout-${design.layout} font-${design.fontStyle} density-${design.density || 'balanced'} ${artworkClass}` : '';
+  // A first, narrow edit must not introduce default font/photo/layout classes.
+  const edited = (key: string) => design && (!design.editedProperties || design.editedProperties.includes(key));
+  const designClasses = design ? [edited('borderStyle') && `design-${design.borderStyle}`, edited('photoShape') && `photo-${design.photoShape}`, edited('layout') && `layout-${design.layout}`, edited('fontStyle') && `font-${design.fontStyle}`, edited('density') && `density-${design.density || 'balanced'}`, design.nameSize && `name-${design.nameSize}`, ...['primary', 'text', 'accent', 'paper'].filter(key => design.editedProperties?.includes(key)).map(key => `color-${key}`), artworkClass].filter(Boolean).join(' ') : '';
   const frameClass = frameStyle === 'template' ? '' : `frame-${frameStyle}`;
   const backgroundClass = backgroundStyle === 'template' ? '' : `background-${backgroundStyle}`;
   const classes = `bio-paper ${template} ${baseTemplate ? 'template-themed' : ''} ${isAiTemplate ? 'ai-custom' : ''} ${isAiFinished ? 'ai-finished' : ''} ${designClasses} ${frameClass} ${backgroundClass} ${compact ? 'compact' : ''}`;
