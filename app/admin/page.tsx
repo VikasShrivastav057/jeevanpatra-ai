@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, Download, FileText, LogOut, RefreshCw, ShieldCheck, Users } from 'lucide-react';
+import { Activity, Download, FileText, LayoutTemplate, LogOut, RefreshCw, ShieldCheck, Users } from 'lucide-react';
 
 type RecordValue = Record<string, unknown>;
 type Overview = {
@@ -39,7 +39,7 @@ export default function AdminPage() {
   }
 
   return <main className="admin-page">
-    <header className="admin-header"><Link href="/" className="admin-brand"><span className="logo-mark small">ज</span><span><strong>JeevanPatra</strong><small>Admin control centre</small></span></Link><div><span className="admin-secure"><ShieldCheck size={16} /> Administrator</span><button className="soft-button" onClick={() => void load()} disabled={loading}><RefreshCw size={15} /> Refresh</button><button className="soft-button" onClick={() => void logout()}><LogOut size={15} /> Sign out</button></div></header>
+    <header className="admin-header"><Link href="/" className="admin-brand"><span className="logo-mark small">ज</span><span><strong>JeevanPatra</strong><small>Admin control centre</small></span></Link><div><span className="admin-secure"><ShieldCheck size={16} /> Administrator</span><Link className="soft-button" href="/"><LayoutTemplate size={15} /> Create biodata</Link><button className="soft-button" onClick={() => void load()} disabled={loading}><RefreshCw size={15} /> Refresh</button><button className="soft-button" onClick={() => void logout()}><LogOut size={15} /> Sign out</button></div></header>
     <section className="admin-shell">
       <div className="admin-heading"><div><p className="eyebrow">Live account oversight</p><h1>Customer activity, clearly organised.</h1><p>See who created an account, when they signed in, what biodata they created and every completed download.</p></div><span className="admin-live"><i /> Live data</span></div>
       {error && <div className="admin-error" role="alert">{error}<button onClick={() => void load()}>Try again</button></div>}
@@ -97,3 +97,4 @@ function numberValue(value: unknown) {
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 }
+

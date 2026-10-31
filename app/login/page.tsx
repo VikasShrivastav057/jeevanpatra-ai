@@ -25,7 +25,10 @@ export default function LoginPage() {
   useEffect(() => {
     fetch('/api/session', { cache: 'no-store' }).then(async (response) => {
       const data = response.ok ? await response.json() as { signedIn?: boolean; role?: string } : {};
-      if (data.signedIn) window.location.replace(data.role === 'admin' ? '/admin' : returnTo);
+      if (data.signedIn) {
+        const destination = data.role === 'admin' || !returnTo.startsWith('/admin') ? returnTo : '/';
+        window.location.replace(destination);
+      }
     }).catch(() => undefined);
   }, [returnTo]);
 
@@ -47,7 +50,7 @@ export default function LoginPage() {
       const response = await fetch('/api/auth/admin-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: adminEmail, password: adminPassword }) });
       const data = await readJson(response) as { error?: string };
       if (!response.ok) throw new Error(data.error || 'Admin sign-in failed.');
-      window.location.assign('/admin');
+      window.location.assign(returnTo);
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Admin sign-in failed.'); }
     finally { setBusy(false); }
   }
@@ -74,8 +77,8 @@ export default function LoginPage() {
           <fieldset className="customer-account-switch"><legend className="sr-only">Customer account action</legend><button type="button" className={customerMode === 'login' ? 'active' : ''} onClick={() => chooseCustomerMode('login')}>Sign in</button><button type="button" className={customerMode === 'signup' ? 'active' : ''} onClick={() => chooseCustomerMode('signup')}>Create account</button></fieldset>
           <form onSubmit={customerAccess} className="auth-form"><label>Email address<input type="email" autoComplete="username" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} placeholder="name@example.com" required /></label><label>Password<input type="password" autoComplete={customerMode === 'signup' ? 'new-password' : 'current-password'} minLength={8} maxLength={128} value={customerPassword} onChange={(event) => setCustomerPassword(event.target.value)} required /></label>{customerMode === 'signup' && <><label>Confirm password<input type="password" autoComplete="new-password" minLength={8} maxLength={128} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></label><p className="auth-password-help">Use at least 8 characters with one letter and one number.</p></>}<button className="primary-button auth-submit" disabled={busy}>{busy ? (customerMode === 'signup' ? 'Creating account…' : 'Signing in…') : (customerMode === 'signup' ? 'Create account and continue' : 'Sign in and continue')}</button></form>
         </> : <>
-          <div className="auth-card-heading"><span className="auth-icon"><ShieldCheck /></span><p className="eyebrow">Administrator</p><h2>Admin control centre.</h2><p>Review customer accounts, sign-ins, biodata creations and downloads.</p></div>
-          <form onSubmit={adminLogin} className="auth-form"><label>Admin email<input type="email" autoComplete="username" value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} required /></label><label>Password<input type="password" autoComplete="current-password" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} required /></label><button className="primary-button auth-submit" disabled={busy}>{busy ? 'Signing in…' : 'Open admin dashboard'}</button></form>
+          <div className="auth-card-heading"><span className="auth-icon"><ShieldCheck /></span><p className="eyebrow">Administrator</p><h2>Enter the complete studio.</h2><p>Create biodata with all customer features. Use Admin controls on the right whenever you want to review accounts, creations and downloads.</p></div>
+          <form onSubmit={adminLogin} className="auth-form"><label>Admin email<input type="email" autoComplete="username" value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} required /></label><label>Password<input type="password" autoComplete="current-password" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} required /></label><button className="primary-button auth-submit" disabled={busy}>{busy ? 'Signing in…' : 'Enter website as admin'}</button></form>
         </>}
         {error && <p className="auth-error" role="alert">{error}</p>}
         <p className="auth-privacy">Passwords are stored as secure one-way hashes. Administrators can never view customer passwords.</p>
@@ -87,3 +90,4 @@ export default function LoginPage() {
 async function readJson(response: Response) {
   try { return await response.json() as unknown; } catch { return {}; }
 }
+
