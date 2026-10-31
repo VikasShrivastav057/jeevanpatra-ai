@@ -229,6 +229,8 @@
 .bio-paper.template-themed.shri-ram-devotional .bio-header h2,.bio-paper.template-themed.mahadev-parvati-devotional .bio-header h2{top:35.7%;font-size:clamp(15px,3.7cqw,28px);line-height:1.12}
 .bio-paper.template-themed .custom-group{grid-column:auto;grid-row:auto}
 .bio-paper.template-themed:is(.shri-ram-devotional,.radha-krishna-devotional,.mahadev-parvati-devotional) .bio-sections{grid-auto-flow:row dense}
+.bio-paper.template-themed:is(.shri-ram-devotional,.radha-krishna-devotional,.mahadev-parvati-devotional) dl div,.bio-paper.template-themed:is(.shri-ram-devotional,.radha-krishna-devotional,.mahadev-parvati-devotional) .bio-contact{font-size:clamp(7px,1.65cqw,14px);line-height:1.35}
+.bio-paper.template-themed:is(.shri-ram-devotional,.radha-krishna-devotional,.mahadev-parvati-devotional) h3{font-size:clamp(10px,2.15cqw,18px)}
 #editor,#templates,#ai-finish{scroll-margin-top:92px}
 .market-steps span{position:static;width:auto;height:auto;border-radius:0;background:transparent}
 .modal-card[open]{position:fixed;inset:0;margin:auto}
@@ -372,3 +374,4 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none!important}
 
 @media(max-width:900px){.auth-page{grid-template-columns:1fr}.auth-brand-panel{min-height:420px}.auth-form-panel{min-height:auto}.admin-metrics{grid-template-columns:repeat(2,1fr)}.creation-admin-grid{grid-template-columns:1fr}}
 @media(max-width:620px){.auth-brand-panel{min-height:380px;padding:24px}.auth-brand-copy h1{font-size:42px}.auth-brand-copy>p:last-child{font-size:14px}.auth-trust-list{display:none}.auth-form-panel{padding:18px}.auth-card{border-radius:22px;padding:22px}.admin-header{align-items:flex-start}.admin-secure{display:none}.admin-header .soft-button{font-size:0}.admin-header .soft-button svg{margin:0}.admin-heading{align-items:flex-start;flex-direction:column}.admin-metrics{grid-template-columns:1fr}.admin-tabs{overflow:auto}.admin-tabs button{white-space:nowrap}.creation-admin-card dl{grid-template-columns:1fr}.creation-fields p{grid-template-columns:1fr}.admin-table th,.admin-table td{padding:12px}}
+

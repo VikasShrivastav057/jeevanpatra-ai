@@ -246,7 +246,7 @@ export default function Home() {
           if (typeof draft.photoKey === 'string') restoredPhotoKey = draft.photoKey;
           if (!requested && templateIds.includes(draft.template as TemplateId)) restoredTemplate = draft.template as TemplateId;
           if (!requested && draft.template === 'ai-custom' && isTemplateDesign(draft.customDesign)) restoredCustomDesign = draft.customDesign;
-          if (!requested && draft.template !== 'ai-custom' && isTemplateDesign(draft.finishDesign)) restoredFinishDesign = draft.finishDesign;
+          if ((!requested || requested === draft.template) && draft.template !== 'ai-custom' && isTemplateDesign(draft.finishDesign)) restoredFinishDesign = draft.finishDesign;
           if (isFrameStyle(draft.frameStyle)) restoredFrameStyle = draft.frameStyle;
           if (isBackgroundStyle(draft.backgroundStyle)) restoredBackgroundStyle = draft.backgroundStyle;
           if (isColorPresetId(draft.colorPreset)) restoredColorPreset = draft.colorPreset;
@@ -281,7 +281,7 @@ export default function Home() {
             if (details && Array.isArray(details.profileFields) && details.profileFields.every(isProfileField)) restoredFields = details.profileFields;
             if (details && isFrameStyle(details.frameStyle)) restoredFrameStyle = details.frameStyle;
             if (!requested && savedProfileCustomDesign) restoredCustomDesign = savedProfileCustomDesign;
-            if (!requested && profile.template !== 'ai-custom' && details && isTemplateDesign(details.finishDesign)) restoredFinishDesign = details.finishDesign;
+            if ((!requested || requested === profile.template) && profile.template !== 'ai-custom' && details && isTemplateDesign(details.finishDesign)) restoredFinishDesign = details.finishDesign;
           }
         }
       } catch { /* Session editing remains available when account storage is offline. */ }
@@ -732,3 +732,4 @@ function Modal({ children, onClose, label, wide = false }: { children: React.Rea
   function close() { if (dialog.current?.open) dialog.current.close(); else onClose(); }
   return <dialog ref={dialog} className={`modal-card ${wide ? 'wide' : ''}`} aria-label={label} aria-modal="true" onClose={onClose}><button className="modal-close" onClick={close} aria-label="Close dialog"><X size={18} /></button>{children}</dialog>;
 }
+
