@@ -165,9 +165,9 @@
 .bio-paper.template-themed.radha-krishna-devotional{background:#fff9e8 url('/templates/radha-krishna-devotional-frame.png') center/100% 100% no-repeat}
 .bio-paper.template-themed.mahadev-parvati-devotional{background:#fffaf0 url('/templates/mahadev-parvati-devotional-frame.png') center/100% 100% no-repeat}
 .bio-paper.template-themed.mahadev-parvati-devotional.artwork-mahadev-radha-krishna{background-image:url('/templates/mahadev-radha-krishna-frame.jpg')!important}
-.bio-paper.template-themed.mahadev-parvati-devotional.artwork-mahadev-radha-krishna .bio-blessing{top:37.7%;left:7%;width:44%;font-size:clamp(8px,1.7cqw,14px)}
-.bio-paper.template-themed.mahadev-parvati-devotional.artwork-mahadev-radha-krishna .bio-header p{top:40%;left:8%;width:84%;font-size:clamp(6px,1.2cqw,10px);line-height:1.25}
-.bio-paper.template-themed.mahadev-parvati-devotional.artwork-mahadev-radha-krishna .bio-sections{top:44%}
+.bio-paper.template-themed.mahadev-parvati-devotional.artwork-mahadev-radha-krishna .bio-blessing{top:39.1%;left:7%;width:44%;font-size:clamp(8px,1.7cqw,14px)}
+.bio-paper.template-themed.mahadev-parvati-devotional.artwork-mahadev-radha-krishna .bio-header p{top:41.5%;left:8%;width:84%;font-size:clamp(6px,1.2cqw,10px);line-height:1.25}
+.bio-paper.template-themed.mahadev-parvati-devotional.artwork-mahadev-radha-krishna .bio-sections{top:45.5%}
 .bio-paper.template-themed.shri-ram-devotional,.bio-paper.template-themed.radha-krishna-devotional,.bio-paper.template-themed.mahadev-parvati-devotional{padding:0;color:var(--template-text);font-family:Georgia,'Times New Roman',serif}
 .bio-paper.template-themed.shri-ram-devotional:before,.bio-paper.template-themed.shri-ram-devotional:after,.bio-paper.template-themed.radha-krishna-devotional:before,.bio-paper.template-themed.radha-krishna-devotional:after,.bio-paper.template-themed.mahadev-parvati-devotional:before,.bio-paper.template-themed.mahadev-parvati-devotional:after{display:none}
 .bio-paper.template-themed.shri-ram-devotional .bio-blessing,.bio-paper.template-themed.radha-krishna-devotional .bio-blessing,.bio-paper.template-themed.mahadev-parvati-devotional .bio-blessing{position:absolute;z-index:2;top:4.1%;left:10.5%;width:33%;color:var(--template-primary);font-family:Georgia,'Times New Roman',serif;font-size:clamp(9px,2.6cqw,18px);font-weight:800;letter-spacing:.04em;text-align:center}
