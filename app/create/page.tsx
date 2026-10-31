@@ -241,6 +241,7 @@ export default function Home() {
   const currentFinishReview = finishReview?.signature === currentCompletionSignature && finishReview.requestKey === finishRequestKey ? finishReview : undefined;
   useEffect(() => () => finishRequest.current?.abort(), []);
   const isCompleted = Boolean(completedSignature && completedSignature === currentCompletionSignature);
+  const photoChangesNeedSave = !isCompleted && sameExceptPhotoAdjustment(completedSignature, currentCompletionSignature);
 
   useEffect(() => {
     let cancelled = false;
@@ -478,7 +479,7 @@ export default function Home() {
     setSaveError('');
     if (photoUploadRequest.current || artworkUploadState === 'uploading') { setSaveError('Wait for the image upload to finish before downloading.'); return; }
     if (accountState !== 'signed-in') { window.location.href = `/login?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
-    if (!isCompleted) { setSaveError('Finish the biodata with AI and save the final result before downloading.'); document.getElementById('ai-finish')?.scrollIntoView({ behavior: 'smooth' }); return; }
+    if (!isCompleted) { setSaveError(photoChangesNeedSave ? 'Save your photo adjustments first. No new AI finishing is needed.' : 'Finish the biodata with AI and save the final result before downloading.'); document.getElementById(photoChangesNeedSave ? 'editor' : 'ai-finish')?.scrollIntoView({ behavior: 'smooth' }); return; }
     setDownloadState('checking');
     try {
       const response = await fetch('/api/download', { method: 'POST' });
@@ -712,7 +713,7 @@ export default function Home() {
 
       <section id="editor" className="border-y border-[#29483f17] bg-[#f2ede2] px-4 py-14 lg:px-8 lg:py-20">
         <div className="mx-auto max-w-[1480px]">
-          <div className="mb-8 flex flex-wrap items-end justify-between gap-5"><div><span className="eyebrow"><Sparkles size={14} /> Live studio</span><h2 className="mt-4 font-serif text-4xl lg:text-5xl">Make it yours.</h2><p className="mt-2 text-[var(--muted)]">Edit the details and watch your biodata come to life.</p></div><div className="print:hidden"><div className="flex flex-wrap justify-end gap-2"><button className="soft-button" onClick={() => void downloadCompletedBiodata()} disabled={downloadState === 'checking'}>{downloadState === 'checking' ? 'Checking…' : isCompleted ? 'Download PDF' : 'Download after finishing'}</button><button className="primary-button" onClick={() => void saveProfile()} disabled={saveState === 'Saving…' || photoState === 'uploading' || artworkUploadState === 'uploading'}>{saveState}</button><span className="sr-only" aria-live="polite">{saveState}</span></div><p className={`completion-note ${isCompleted ? 'ready' : ''}`}>{isCompleted ? 'Completed and ready to download.' : 'Complete AI finishing before download is enabled.'}</p>{saveError && <p className="mt-2 max-w-[380px] text-right text-xs font-bold text-[#9d3030]" role="alert">{saveError}</p>}</div></div>
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-5"><div><span className="eyebrow"><Sparkles size={14} /> Live studio</span><h2 className="mt-4 font-serif text-4xl lg:text-5xl">Make it yours.</h2><p className="mt-2 text-[var(--muted)]">Edit the details and watch your biodata come to life.</p></div><div className="print:hidden"><div className="flex flex-wrap justify-end gap-2"><button className="soft-button" onClick={() => void downloadCompletedBiodata()} disabled={downloadState === 'checking'}>{downloadState === 'checking' ? 'Checking…' : isCompleted ? 'Download PDF' : photoChangesNeedSave ? 'Save photo changes first' : 'Download after finishing'}</button><button className="primary-button" onClick={() => void saveProfile()} disabled={saveState === 'Saving…' || photoState === 'uploading' || artworkUploadState === 'uploading'}>{saveState}</button><span className="sr-only" aria-live="polite">{saveState}</span></div><p className={`completion-note ${isCompleted ? 'ready' : ''}`}>{isCompleted ? 'Completed and ready to download.' : photoChangesNeedSave ? 'Save your photo adjustments to download. No new AI finishing is needed.' : 'Complete AI finishing before download is enabled.'}</p>{saveError && <p className="mt-2 max-w-[380px] text-right text-xs font-bold text-[#9d3030]" role="alert">{saveError}</p>}</div></div>
           <div className="studio-grid grid gap-5 xl:grid-cols-[320px_minmax(500px,1fr)_280px]">
             <aside className="editor-panel print:hidden">
               <div className="panel-title"><span>01</span> Your details</div>
