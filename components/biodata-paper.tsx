@@ -10,7 +10,7 @@ export type BorderStyle = 'classic' | 'floral' | 'arch' | 'minimal' | 'rounded' 
 export type FrameStyle = 'template' | 'square' | 'rounded' | 'arch' | 'oval' | 'circle' | 'double';
 export type BackgroundStyle = 'template' | 'plain' | 'parchment' | 'dots' | 'geometric' | 'weave' | 'radiant';
 export type TemplateColors = { paper: string; primary: string; accent: string; text: string };
-export type TemplateDesign = { name: string; note: string; primary: string; accent: string; paper: string; text: string; borderStyle: BorderStyle; photoShape: 'circle' | 'rounded' | 'square'; layout: 'classic' | 'portrait-top'; fontStyle: 'classic' | 'modern' | 'traditional'; blessing: string; density?: 'compact' | 'balanced' | 'airy'; artwork?: DevotionalArtwork };
+export type TemplateDesign = { name: string; note: string; primary: string; accent: string; paper: string; text: string; borderStyle: BorderStyle; photoShape: 'circle' | 'rounded' | 'square'; layout: 'classic' | 'portrait-top'; fontStyle: 'classic' | 'modern' | 'traditional'; blessing: string; blessingOverride?: string; density?: 'compact' | 'balanced' | 'airy'; artwork?: DevotionalArtwork };
 
 export function BiodataPaper({ template, photo, name, about, fields, design, uploadedArtwork, frameStyle = 'template', backgroundStyle = 'template', colorOverride, compact = false }: { template: TemplateId; photo: string; name: string; about: string; fields: ProfileField[]; design?: TemplateDesign; uploadedArtwork?: UploadedArtwork; frameStyle?: FrameStyle; backgroundStyle?: BackgroundStyle; colorOverride?: TemplateColors; compact?: boolean }) {
   const personal = fields.filter((field) => field.section === 'personal' && field.label.trim() && field.value.trim());
@@ -32,7 +32,7 @@ export function BiodataPaper({ template, photo, name, about, fields, design, upl
   const frameClass = frameStyle === 'template' ? '' : `frame-${frameStyle}`;
   const backgroundClass = backgroundStyle === 'template' ? '' : `background-${backgroundStyle}`;
   const classes = `bio-paper ${template} ${baseTemplate ? 'template-themed' : ''} ${isAiTemplate ? 'ai-custom' : ''} ${isAiFinished ? 'ai-finished' : ''} ${designClasses} ${frameClass} ${backgroundClass} ${compact ? 'compact' : ''}`;
-  const blessing = isAiTemplate && design.blessing ? design.blessing : baseTemplate?.blessing || design?.blessing || 'Marriage biodata';
+  const blessing = design?.blessingOverride !== undefined ? design.blessingOverride : isAiTemplate && design.blessing ? design.blessing : baseTemplate?.blessing || design?.blessing || 'Marriage biodata';
   const displayName = name.trim() || 'Your name';
   const replaceHeader = uploadedArtwork?.placement === 'replace-header' && ['mahadev-parvati-devotional', 'radha-krishna-devotional', 'shri-ram-devotional'].includes(template);
   const artworkPlacement = replaceHeader ? 'replace-header' : uploadedArtwork?.placement === 'below-details' ? 'below-details' : 'above-details';

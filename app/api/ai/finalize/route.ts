@@ -3,11 +3,13 @@ import { runtimeEnv } from '../../../../lib/runtime-env';
 import { getGroqTextModels } from '../../../../lib/groq-models';
 import { requestsFieldEdits } from '../../../../lib/finishing-intent';
 import { getTemplateById, type TemplateId } from '../../../../lib/template-catalog';
-import { resolveDevotionalArtwork, type DevotionalArtwork } from '../../../../lib/devotional-artwork';
+import { requestsDevotionalArtwork, resolveDevotionalArtwork, type DevotionalArtwork } from '../../../../lib/devotional-artwork';
+import { readBlessingEdit } from '../../../../lib/blessing-edit';
 
 type FieldSection = 'personal' | 'family' | 'contact' | 'preferences';
 type FieldSummary = { id: string; label: string; section: FieldSection; hasValue: boolean };
 type Design = {
+  blessingOverride?: string;
   artwork?: DevotionalArtwork;
   name: string;
   note: string;
@@ -68,6 +70,7 @@ function cleanDesign(value: unknown): Design {
   const item = isRecord(value) ? value : {};
   const paper = typeof item.paper === 'string' && hex.test(item.paper) ? item.paper.toLowerCase() : fallback.paper;
   return {
+    ...(typeof item.blessingOverride === 'string' ? { blessingOverride: item.blessingOverride.trim().slice(0, 120) } : {}),
     artwork: item.artwork === 'mahadev-radha-krishna' || item.artwork === 'radha-krishna-replacement' ? item.artwork : 'template',
     name: typeof item.name === 'string' && item.name.trim() ? item.name.trim().slice(0, 30) : fallback.name,
     note: typeof item.note === 'string' && item.note.trim() ? item.note.trim().slice(0, 55) : fallback.note,
@@ -163,15 +166,20 @@ export async function POST(request: Request) {
   }
 
   const cleanOriginalIntroduction = introduction.trim();
+  const base = getTemplateById(currentTemplate.split(':')[0].trim() as TemplateId);
+  const preservedDesign = isRecord(body.currentDesign) ? cleanDesign(body.currentDesign) : {
+    ...fallback, ...base?.theme, name: base?.name || fallback.name, blessing: base?.blessing || '',
+  };
+  const displayedBlessing = preservedDesign.blessingOverride ?? (base?.blessing || preservedDesign.blessing || 'Marriage biodata');
+  const blessingEdit = readBlessingEdit(recommendation, displayedBlessing, base?.blessing);
   const artwork = resolveDevotionalArtwork(recommendation, currentTemplate, isRecord(body.currentDesign) ? body.currentDesign.artwork : undefined);
-  const artworkOnly = currentTemplate.includes('mahadev-parvati-devotional') && /\bradha[\s-]*krishna\b/i.test(recommendation)
+  if (blessingEdit !== undefined && !requestsFieldEdits(recommendation) && !requestsDevotionalArtwork(recommendation)) {
+    return Response.json({ introduction: cleanOriginalIntroduction, fieldOrder: sanitizedFields.map(field => field.id), fieldUpdates: [], design: { ...preservedDesign, blessingOverride: blessingEdit }, model: 'header-text-edit' });
+  }
+  const artworkOnly = currentTemplate.includes('mahadev-parvati-devotional') && requestsDevotionalArtwork(recommendation)
     && /\b(only\s+(?:replace|add|remove|change)|do not change any other|keep everything else)\b/i.test(recommendation) && !requestsFieldEdits(recommendation);
   if (artworkOnly) {
-    const base = getTemplateById(currentTemplate.split(':')[0].trim() as TemplateId);
-    const design = isRecord(body.currentDesign) ? cleanDesign(body.currentDesign) : {
-      ...fallback, ...base?.theme, name: base?.name || fallback.name, blessing: base?.blessing || '',
-    };
-    return Response.json({ introduction: cleanOriginalIntroduction, fieldOrder: sanitizedFields.map(field => field.id), fieldUpdates: [], design: { ...design, artwork }, model: 'artwork-selection' });
+    return Response.json({ introduction: cleanOriginalIntroduction, fieldOrder: sanitizedFields.map(field => field.id), fieldUpdates: [], design: { ...preservedDesign, artwork }, model: 'artwork-selection' });
   }
   if (runtimeEnv.AI_TEST_MODE === 'true') {
     return Response.json({
@@ -248,7 +256,7 @@ export async function POST(request: Request) {
           fieldOrder: cleanFieldOrder(item.fieldOrder, sanitizedFields),
           fieldUpdates,
           changes: Array.isArray(item.changes) ? item.changes.filter((change): change is string => typeof change === 'string').slice(0, 8).map(change => change.slice(0, 180)) : [],
-          design: { ...cleanDesign(item.design), artwork },
+          design: { ...cleanDesign(item.design), artwork, ...(blessingEdit !== undefined ? { blessingOverride: blessingEdit } : preservedDesign.blessingOverride !== undefined ? { blessingOverride: preservedDesign.blessingOverride } : {}) },
         });
       } catch {
         lastError = 'Groq returned a result that could not be read.';
