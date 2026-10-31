@@ -2,6 +2,7 @@ import { getAppSession, getStudioOwnerId, logActivity } from '../../../lib/app-a
 import { upsertProfileInChroma } from '../../../lib/chroma';
 import { database } from '../../../lib/database';
 import { builtInTemplateIds, type TemplateId } from '../../../lib/template-catalog';
+import { isUploadedArtwork } from '../../../lib/uploaded-artwork';
 
 const validTemplates = new Set<TemplateId>([...builtInTemplateIds, 'ai-custom']);
 
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
   if (!name || name.length > 120) return invalid('Add a name shorter than 120 characters.');
   if (introduction.length > 1600) return invalid('Keep the introduction under 1600 characters.');
   if (!template) return invalid('Choose a valid template.');
+  if (isRecord(body.details) && body.details.uploadedArtwork != null && !isUploadedArtwork(body.details.uploadedArtwork)) return invalid('Choose a valid uploaded artwork image and placement.');
   if (photoKey === null || (photoKey && (photoKey.length > 300 || !/^profiles\/[a-zA-Z0-9_-]+\/portrait\.(?:jpg|png)$/.test(photoKey)))) return invalid('Choose a valid uploaded photo.');
 
   let profileJson: string;
@@ -73,3 +75,4 @@ export async function GET(request: Request) {
     return Response.json({ error: 'Storage is temporarily unavailable. Please try again.' }, { status: 503 });
   }
 }
+

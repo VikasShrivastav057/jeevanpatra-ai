@@ -166,6 +166,20 @@
 .bio-paper.template-themed.mahadev-parvati-devotional{background:#fffaf0 url('/templates/mahadev-parvati-devotional-frame.png') center/100% 100% no-repeat}
 .bio-paper.template-themed.mahadev-parvati-devotional.artwork-mahadev-radha-krishna{background-image:url('/templates/mahadev-radha-krishna-frame.jpg')!important}
 .bio-paper.template-themed.mahadev-parvati-devotional.artwork-radha-krishna-replacement{background-image:url('/templates/radha-krishna-mountain-frame.jpg')!important}
+.bio-paper .uploaded-artwork{position:relative;z-index:3;grid-column:1/-1;width:100%;height:18cqw;min-height:40px;overflow:hidden;border:1px solid var(--active-accent);border-radius:10px;background:var(--active-paper);box-shadow:0 2px 8px #00000012}
+.bio-paper .uploaded-artwork img{object-fit:contain;object-position:center}
+.bio-paper .uploaded-artwork.artwork-size-small{height:12cqw}
+.bio-paper .uploaded-artwork.artwork-size-large{height:25cqw}
+.bio-paper .uploaded-artwork.artwork-placement-replace-header{position:absolute;top:1.5%;right:4%;width:54%;height:36%;min-height:0;border-radius:3%}
+.bio-paper .uploaded-artwork.artwork-placement-replace-header.artwork-size-small{top:7%;right:7%;width:43%;height:27%}
+.bio-paper .uploaded-artwork.artwork-placement-replace-header.artwork-size-large{top:1%;right:3%;width:56%;height:37%}
+.bio-paper.radha-krishna-devotional .uploaded-artwork.artwork-placement-replace-header{top:1%;height:27%}
+.bio-paper.radha-krishna-devotional .uploaded-artwork.artwork-placement-replace-header.artwork-size-small{top:4%;height:22%}
+.bio-paper.radha-krishna-devotional .uploaded-artwork.artwork-placement-replace-header.artwork-size-large{top:.5%;height:28%}
+.bio-paper .with-artwork-above>.uploaded-artwork{grid-row:1}
+.bio-paper.template-themed:is(.pearl-jewel-luxe,.emerald-gold-registry):has(.with-artwork-above) .bio-header{top:calc(17% + var(--uploaded-artwork-height) + 3cqw)}
+.bio-paper.template-themed:is(.shri-ram-devotional,.radha-krishna-devotional,.mahadev-parvati-devotional) .with-artwork-above>.bio-section.personal,.bio-paper.template-themed:is(.shri-ram-devotional,.radha-krishna-devotional,.mahadev-parvati-devotional) .with-artwork-above>.bio-section.family{grid-row:2}
+.bio-paper.template-themed:is(.shri-ram-devotional,.radha-krishna-devotional,.mahadev-parvati-devotional) .with-artwork-above>.bio-section.preferences,.bio-paper.template-themed:is(.shri-ram-devotional,.radha-krishna-devotional,.mahadev-parvati-devotional) .with-artwork-above>.bio-contact{grid-row:3}
 .bio-paper.template-themed.mahadev-parvati-devotional.artwork-mahadev-radha-krishna .bio-blessing{top:39.1%;left:7%;width:44%;font-size:clamp(8px,1.7cqw,14px)}
 .bio-paper.template-themed.mahadev-parvati-devotional.artwork-mahadev-radha-krishna .bio-header p{top:41.5%;left:8%;width:84%;font-size:clamp(6px,1.2cqw,10px);line-height:1.25}
 .bio-paper.template-themed.mahadev-parvati-devotional.artwork-mahadev-radha-krishna .bio-sections{top:45.5%}

@@ -7,6 +7,7 @@ import { ArrowDown, ArrowUp, Check, ChevronDown, LayoutTemplate, ListPlus, Menu,
 import { builtInTemplateIds, getTemplateById, templateCatalog, type TemplateId } from '../../lib/template-catalog';
 import { readApiResponse } from '../../lib/read-api-response';
 import { printBiodata } from '../../lib/print-biodata';
+import { isUploadedArtwork, type UploadedArtwork } from '../../lib/uploaded-artwork';
 import { BiodataPaper, type BackgroundStyle, type FieldSection, type FrameStyle, type ProfileField, type TemplateColors, type TemplateDesign } from '../../components/biodata-paper';
 
 type AiTone = 'warm' | 'concise' | 'traditional';
@@ -145,6 +146,7 @@ function completionSignature(value: {
   backgroundStyle: BackgroundStyle;
   colorPreset: ColorPresetId;
   customColors: TemplateColors;
+  uploadedArtwork?: UploadedArtwork;
 }) {
   return JSON.stringify(value);
 }
@@ -188,6 +190,10 @@ export default function Home() {
   const [finishImprovementMode, setFinishImprovementMode] = useState<FinishImprovementMode>('balanced');
   const [finishState, setFinishState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [finishError, setFinishError] = useState('');
+  const [uploadedArtwork, setUploadedArtwork] = useState<UploadedArtwork>();
+  const [artworkUploadState, setArtworkUploadState] = useState<'idle' | 'uploading' | 'error'>('idle');
+  const [artworkUploadError, setArtworkUploadError] = useState('');
+  const artworkInput = useRef<HTMLInputElement>(null);
   const [fieldBuilderOpen, setFieldBuilderOpen] = useState(false);
   const [fieldIdea, setFieldIdea] = useState('');
   const [fieldBuilderState, setFieldBuilderState] = useState<'idle' | 'loading' | 'error'>('idle');
@@ -213,7 +219,7 @@ export default function Home() {
     if (colorPreset === 'custom') return customColors;
     return colorPresets.find((option) => option.id === colorPreset)?.colors;
   }, [colorPreset, customColors]);
-  const currentCompletionSignature = useMemo(() => completionSignature({ name, about, profileFields, template, customDesign, finishDesign, frameStyle, backgroundStyle, colorPreset, customColors }), [about, backgroundStyle, colorPreset, customColors, customDesign, finishDesign, frameStyle, name, profileFields, template]);
+  const currentCompletionSignature = useMemo(() => completionSignature({ name, about, profileFields, template, customDesign, finishDesign, frameStyle, backgroundStyle, colorPreset, customColors, uploadedArtwork }), [about, backgroundStyle, colorPreset, customColors, customDesign, finishDesign, frameStyle, name, profileFields, template, uploadedArtwork]);
   const isCompleted = Boolean(completedSignature && completedSignature === currentCompletionSignature);
 
   useEffect(() => {
@@ -233,13 +239,17 @@ export default function Home() {
       let restoredPhotoKey: string | undefined;
       let restoredCompletedSignature: string | undefined;
       let savedProfileCustomDesign: TemplateDesign | undefined;
+      let restoredUploadedArtwork: UploadedArtwork | undefined;
+      let draftHasArtworkSetting = false;
       let draftHasProfileData = false;
       let resolvedAccountState: 'signed-in' | 'signed-out' = 'signed-out';
 
       try {
         const savedDraft = sessionStorage.getItem(draftKey);
         if (savedDraft) {
-          const draft = JSON.parse(savedDraft) as { name?: unknown; about?: unknown; profileFields?: unknown; template?: unknown; customDesign?: unknown; finishDesign?: unknown; frameStyle?: unknown; backgroundStyle?: unknown; colorPreset?: unknown; customColors?: unknown; photoKey?: unknown };
+          const draft = JSON.parse(savedDraft) as { name?: unknown; about?: unknown; profileFields?: unknown; template?: unknown; customDesign?: unknown; finishDesign?: unknown; frameStyle?: unknown; backgroundStyle?: unknown; colorPreset?: unknown; customColors?: unknown; photoKey?: unknown; uploadedArtwork?: unknown };
+          draftHasArtworkSetting = 'uploadedArtwork' in draft;
+          if (isUploadedArtwork(draft.uploadedArtwork)) restoredUploadedArtwork = draft.uploadedArtwork;
           if (typeof draft.name === 'string') restoredName = draft.name;
           if (typeof draft.about === 'string') restoredAbout = draft.about;
           if (Array.isArray(draft.profileFields) && draft.profileFields.every(isProfileField)) restoredFields = draft.profileFields;
@@ -267,6 +277,7 @@ export default function Home() {
         const payload = response.ok ? await response.json() as unknown : undefined;
         const profile = isRecord(payload) && isRecord(payload.profile) ? payload.profile : undefined;
         const details = profile && isRecord(profile.details) ? profile.details : undefined;
+        if (!draftHasArtworkSetting && details && isUploadedArtwork(details.uploadedArtwork)) restoredUploadedArtwork = details.uploadedArtwork;
         if (profile?.template === 'ai-custom' && details && isTemplateDesign(details.customDesign)) savedProfileCustomDesign = details.customDesign;
         if (details && restoredBackgroundStyle === undefined && isBackgroundStyle(details.backgroundStyle)) restoredBackgroundStyle = details.backgroundStyle;
         if (details && restoredColorPreset === undefined && isColorPresetId(details.colorPreset)) restoredColorPreset = details.colorPreset;
@@ -304,6 +315,7 @@ export default function Home() {
       }
 
       if (cancelled) return;
+      if (restoredUploadedArtwork?.placement === 'replace-header' && !(restoredTemplate || 'saffron').endsWith('-devotional')) restoredUploadedArtwork = { ...restoredUploadedArtwork, placement: 'above-details' };
       setAccountState(resolvedAccountState);
       if (restoredName !== undefined) setName(restoredName);
       if (restoredAbout !== undefined) setAbout(restoredAbout);
@@ -316,6 +328,7 @@ export default function Home() {
       if (restoredColorPreset) setColorPreset(restoredColorPreset);
       if (restoredCustomColors) setCustomColors(restoredCustomColors);
       if (restoredCompletedSignature) setCompletedSignature(restoredCompletedSignature);
+      if (restoredUploadedArtwork) setUploadedArtwork(restoredUploadedArtwork);
       if (restoredPhotoKey) {
         const filename = restoredPhotoKey.split('/').at(-1);
         if (filename && /^portrait\.(?:jpg|png)$/.test(filename)) { setPhotoKey(restoredPhotoKey); setPhoto(`/api/photo/${filename}`); }
@@ -330,8 +343,8 @@ export default function Home() {
 
   useEffect(() => {
     if (!draftReady) return;
-    sessionStorage.setItem(draftKey, JSON.stringify({ name, about, profileFields, template, customDesign, finishDesign, frameStyle, backgroundStyle, colorPreset, customColors, photoKey }));
-  }, [about, backgroundStyle, colorPreset, customColors, customDesign, draftReady, finishDesign, frameStyle, name, photoKey, profileFields, template]);
+    sessionStorage.setItem(draftKey, JSON.stringify({ name, about, profileFields, template, customDesign, finishDesign, frameStyle, backgroundStyle, colorPreset, customColors, photoKey, uploadedArtwork: uploadedArtwork ?? null }));
+  }, [about, backgroundStyle, colorPreset, customColors, customDesign, draftReady, finishDesign, frameStyle, name, photoKey, profileFields, template, uploadedArtwork]);
 
   useEffect(() => {
     const context = (document as unknown as { modelContext?: { registerTool?: (tool: unknown, options?: { signal: AbortSignal }) => void | Promise<void> } }).modelContext;
@@ -398,7 +411,7 @@ export default function Home() {
       template,
       photoKey,
       completed: input.completed,
-      details: { profileFields: input.nextFields ?? profileFields, customDesign: input.nextCustomDesign ?? customDesign, finishDesign: input.nextFinishDesign ?? finishDesign, frameStyle, backgroundStyle, colorPreset, customColors, completionSignature: input.signature },
+      details: { profileFields: input.nextFields ?? profileFields, customDesign: input.nextCustomDesign ?? customDesign, finishDesign: input.nextFinishDesign ?? finishDesign, frameStyle, backgroundStyle, colorPreset, customColors, completionSignature: input.signature, uploadedArtwork: uploadedArtwork ?? null },
     }) });
     if (response.status === 401) { window.location.href = `/login?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`; throw new Error('Sign in to continue.'); }
     const data = await response.json().catch(() => ({})) as { error?: string };
@@ -489,6 +502,7 @@ export default function Home() {
   }
   function selectTemplate(id: TemplateId) {
     setTemplate(id);
+    if (!id.endsWith('-devotional')) setUploadedArtwork(current => current?.placement === 'replace-header' ? { ...current, placement: 'above-details' } : current);
     setFinishDesign(undefined);
     if (id !== 'ai-custom') setCustomDesign(undefined);
     const url = new URL(window.location.href);
@@ -533,12 +547,29 @@ export default function Home() {
       const response = await fetch('/api/ai/design', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idea: designIdea, referenceImage: designReference || undefined }) });
       const data = await readApiResponse<{ design?: TemplateDesign }>(response, 'AI could not create this design.');
       if (!response.ok || !data.design) throw new Error(data.error || 'AI could not create this design.');
+      setUploadedArtwork(current => current?.placement === 'replace-header' ? { ...current, placement: 'above-details' } : current);
       setCustomDesign(data.design); setFinishDesign(undefined); setFrameStyle('template'); setBackgroundStyle('template'); setColorPreset('template'); setTemplate('ai-custom'); setDesignState('idle'); setDesignOpen(false); setDesignReference(''); setDesignReferenceName('');
       const url = new URL(window.location.href);
       url.searchParams.set('template', 'ai-custom');
       window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
       sessionStorage.setItem('jeevanpatra-ai-design', JSON.stringify(data.design));
     } catch (error) { setDesignState('error'); setDesignError(error instanceof Error ? error.message : 'Something went wrong.'); }
+  }
+  async function uploadFinishingImage(file?: File) {
+    if (!file) return;
+    setArtworkUploadError('');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size === 0 || file.size > 5_000_000) {
+      setArtworkUploadState('error'); setArtworkUploadError('Choose a JPG, PNG or WebP under 5 MB.'); return;
+    }
+    setArtworkUploadState('uploading');
+    try {
+      const form = new FormData(); form.append('photo', file); form.append('purpose', 'artwork');
+      const response = await fetch('/api/photo', { method: 'POST', body: form });
+      const data = await readApiResponse<{ url?: string }>(response, 'Your image could not be uploaded.');
+      const next: UploadedArtwork = { src: data.url || '', placement: uploadedArtwork?.placement || (template.endsWith('-devotional') ? 'replace-header' : 'above-details'), size: uploadedArtwork?.size || 'medium' };
+      if (!response.ok || !isUploadedArtwork(next)) throw new Error(data.error || 'Your image could not be uploaded. Sign in and try again.');
+      setUploadedArtwork(next); setArtworkUploadState('idle');
+    } catch (error) { setArtworkUploadState('error'); setArtworkUploadError(error instanceof Error ? error.message : 'Your image could not be uploaded.'); }
   }
   async function finishWithAi() {
     setFinishState('loading'); setFinishError('');
@@ -563,7 +594,7 @@ export default function Home() {
       });
       const nextCustomDesign = template === 'ai-custom' ? data.design : customDesign;
       const nextFinishDesign = template === 'ai-custom' ? undefined : data.design;
-      const signature = completionSignature({ name, about: data.introduction, profileFields: nextFields, template, customDesign: nextCustomDesign, finishDesign: nextFinishDesign, frameStyle, backgroundStyle, colorPreset, customColors });
+      const signature = completionSignature({ name, about: data.introduction, profileFields: nextFields, template, customDesign: nextCustomDesign, finishDesign: nextFinishDesign, frameStyle, backgroundStyle, colorPreset, customColors, uploadedArtwork });
       setAbout(data.introduction); setProfileFields(nextFields);
       if (template === 'ai-custom') {
         setCustomDesign(data.design);
@@ -597,7 +628,7 @@ export default function Home() {
 
       <section id="editor" className="border-y border-[#29483f17] bg-[#f2ede2] px-4 py-14 lg:px-8 lg:py-20">
         <div className="mx-auto max-w-[1480px]">
-          <div className="mb-8 flex flex-wrap items-end justify-between gap-5"><div><span className="eyebrow"><Sparkles size={14} /> Live studio</span><h2 className="mt-4 font-serif text-4xl lg:text-5xl">Make it yours.</h2><p className="mt-2 text-[var(--muted)]">Edit the details and watch your biodata come to life.</p></div><div className="print:hidden"><div className="flex flex-wrap justify-end gap-2"><button className="soft-button" onClick={() => void downloadCompletedBiodata()} disabled={downloadState === 'checking'}>{downloadState === 'checking' ? 'Checking…' : isCompleted ? 'Download PDF' : 'Download after finishing'}</button><button className="primary-button" onClick={() => void saveProfile()} disabled={saveState === 'Saving…' || photoState === 'uploading'}>{saveState}</button><span className="sr-only" aria-live="polite">{saveState}</span></div><p className={`completion-note ${isCompleted ? 'ready' : ''}`}>{isCompleted ? 'Completed and ready to download.' : 'Complete AI finishing before download is enabled.'}</p>{saveError && <p className="mt-2 max-w-[380px] text-right text-xs font-bold text-[#9d3030]" role="alert">{saveError}</p>}</div></div>
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-5"><div><span className="eyebrow"><Sparkles size={14} /> Live studio</span><h2 className="mt-4 font-serif text-4xl lg:text-5xl">Make it yours.</h2><p className="mt-2 text-[var(--muted)]">Edit the details and watch your biodata come to life.</p></div><div className="print:hidden"><div className="flex flex-wrap justify-end gap-2"><button className="soft-button" onClick={() => void downloadCompletedBiodata()} disabled={downloadState === 'checking'}>{downloadState === 'checking' ? 'Checking…' : isCompleted ? 'Download PDF' : 'Download after finishing'}</button><button className="primary-button" onClick={() => void saveProfile()} disabled={saveState === 'Saving…' || photoState === 'uploading' || artworkUploadState === 'uploading'}>{saveState}</button><span className="sr-only" aria-live="polite">{saveState}</span></div><p className={`completion-note ${isCompleted ? 'ready' : ''}`}>{isCompleted ? 'Completed and ready to download.' : 'Complete AI finishing before download is enabled.'}</p>{saveError && <p className="mt-2 max-w-[380px] text-right text-xs font-bold text-[#9d3030]" role="alert">{saveError}</p>}</div></div>
           <div className="studio-grid grid gap-5 xl:grid-cols-[320px_minmax(500px,1fr)_280px]">
             <aside className="editor-panel print:hidden">
               <div className="panel-title"><span>01</span> Your details</div>
@@ -615,7 +646,7 @@ export default function Home() {
               </div>}
               <div className="mt-7 border-t border-[#29483f15] pt-6"><div className="panel-title"><span>02</span> Photo</div><input ref={fileInput} type="file" accept="image/jpeg,image/png" className="hidden" onChange={(e) => handlePhoto(e.target.files?.[0])} /><button className="upload-box" disabled={photoState === 'uploading'} onClick={() => fileInput.current?.click()}><Upload size={22} /><strong>{photoState === 'uploading' ? 'Uploading photo…' : photoState === 'saved' ? 'Photo uploaded ✓' : 'Upload your photo'}</strong><small>JPG or PNG · Max 5 MB</small></button>{photoError && <p className="ai-error" role="alert">{photoError}</p>}<span className="sr-only" aria-live="polite">{photoState === 'saved' ? 'Photo uploaded successfully.' : ''}</span></div>
             </aside>
-            <section className="preview-shell"><div className="preview-toolbar print:hidden"><span className="flex items-center gap-2 text-sm font-bold"><span className="live-dot" /> Live preview</span><span className="text-xs text-[var(--muted)]">{active.name} · A4</span></div><BiodataPaper template={template} photo={photo} name={name} about={about} fields={profileFields} design={template === 'ai-custom' ? customDesign : finishDesign} frameStyle={frameStyle} backgroundStyle={backgroundStyle} colorOverride={activeColorOverride} /></section>
+            <section className="preview-shell"><div className="preview-toolbar print:hidden"><span className="flex items-center gap-2 text-sm font-bold"><span className="live-dot" /> Live preview</span><span className="text-xs text-[var(--muted)]">{active.name} · A4</span></div><BiodataPaper template={template} photo={photo} name={name} about={about} fields={profileFields} design={template === 'ai-custom' ? customDesign : finishDesign} uploadedArtwork={uploadedArtwork} frameStyle={frameStyle} backgroundStyle={backgroundStyle} colorOverride={activeColorOverride} /></section>
             <aside className="editor-panel print:hidden" id="templates">
               <div className="panel-title"><span>03</span> Choose a style</div>
               <div className="space-y-3">{quickTemplates.map((item) => <button key={item.id} aria-pressed={template === item.id} onClick={() => selectTemplate(item.id)} className={`template-option ${template === item.id ? 'active' : ''}`}><span className={`mini-paper ${item.id}`} style={templatePreviewStyle(item.id, customDesign)}><i /><b /></span><span className="text-left"><strong>{item.name}</strong><small>{item.note}</small></span>{template === item.id && <Check className="ml-auto" size={18} />}</button>)}</div>
@@ -718,9 +749,25 @@ export default function Home() {
             {template === 'mahadev-parvati-devotional' && <div className="mt-3 text-xs leading-5 text-[var(--muted)]"><p>Devotional artwork: original Mahadev–Parvati, add Radha Krishna opposite them, or replace only the divine couple.</p><button type="button" className="soft-button mt-2" onClick={() => setStyleRecommendation('Add a Radha Krishna image opposite Mahadev and Mata Parvati. Keep both divine images balanced, elegant and devotional. Preserve my photo, name and details. Keep the current colours and fonts.')}>Add Radha Krishna opposite Mahadev</button><button type="button" className="soft-button mt-2" onClick={() => { setFinishImprovementMode('requested-only'); setStyleRecommendation('Only replace the Mahadev and Parvati image with Radha Krishna. Maintain the same image position, size and decorative feel. Do not change any other section, text, theme, colours or layout.'); }}>Replace Mahadev–Parvati with Radha Krishna</button><button type="button" className="mt-2 block underline" onClick={() => setStyleRecommendation('Remove Radha Krishna and keep the original Mahadev and Mata Parvati artwork. Keep my other design settings.')}>Use original artwork</button></div>}
           </div>
         </div>
-        <p className="privacy-note">Your visual choices, introduction and field labels are sent to Groq. Phone, address, family and other field values are not sent.</p>
+        <section className="mt-6 rounded-2xl border border-[#29483f26] bg-[#faf8f2] p-4" aria-label="Add your own image">
+          <h3 className="font-serif text-xl">Add your own image</h3>
+          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">Upload artwork or a devotional photo to include in your biodata. Your profile portrait stays separate.</p>
+          <input ref={artworkInput} aria-label="Upload artwork image" className="hidden" type="file" accept="image/jpeg,image/png,image/webp" onChange={event => { void uploadFinishingImage(event.target.files?.[0]); event.target.value = ''; }} />
+          <button type="button" className="soft-button mt-3" disabled={artworkUploadState === 'uploading' || finishState === 'loading'} onClick={() => artworkInput.current?.click()}><Upload size={16} />{artworkUploadState === 'uploading' ? 'Uploading image…' : uploadedArtwork ? 'Replace uploaded image' : 'Upload image'}</button>
+          <small className="ml-3 text-[var(--muted)]">JPG, PNG or WebP · Up to 5 MB</small>
+          {uploadedArtwork && <div className="mt-4 grid gap-4 sm:grid-cols-[160px_1fr]">
+            <Image src={uploadedArtwork.src} alt="Artwork to add" width={160} height={120} unoptimized className="h-[120px] w-[160px] rounded-lg bg-white object-contain" />
+            <div><label className="field-label">Image placement<select className="mt-1 w-full rounded-lg border bg-white p-2 text-xs" value={uploadedArtwork.placement} onChange={event => setUploadedArtwork(current => current ? { ...current, placement: event.target.value as UploadedArtwork['placement'] } : current)}>{template.endsWith('-devotional') && <option value="replace-header">Replace devotional picture</option>}<option value="above-details">Above the details</option><option value="below-details">Below the details</option></select></label>
+            <label className="field-label">Image size<select className="mt-1 w-full rounded-lg border bg-white p-2 text-xs" value={uploadedArtwork.size} onChange={event => setUploadedArtwork(current => current ? { ...current, size: event.target.value as UploadedArtwork['size'] } : current)}><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></label>
+            <button type="button" className="mt-3 text-xs font-bold text-[#9d3030] underline" onClick={() => { setUploadedArtwork(undefined); setArtworkUploadError(''); setArtworkUploadState('idle'); }}>Remove uploaded image</button></div>
+          </div>}
+          <p className="mt-3 text-xs leading-5 text-[var(--muted)]">The preview updates immediately. Apply your choices or save the biodata to keep the image for your next login and PDF download.</p>
+          {artworkUploadError && <p className="ai-error" role="alert">{artworkUploadError}</p>}
+          <span className="sr-only" aria-live="polite">{artworkUploadState === 'uploading' ? 'Uploading artwork' : uploadedArtwork ? 'Artwork ready in preview' : ''}</span>
+        </section>
+        <p className="privacy-note">Your uploaded image is stored privately with your account and included in the biodata and PDF. It is not sent to Groq. Your visual choices, introduction and field labels are sent to Groq; other field values are not sent.</p>
         {finishError && <p className="ai-error" role="alert">{finishError}</p>}
-        <button className="primary-button mt-6 w-full justify-center py-3.5" onClick={finishWithAi} disabled={finishState === 'loading'}><Sparkles size={17} /> {finishState === 'loading' ? 'Creating the final biodata…' : 'Apply my choices with AI'}</button>
+        <button className="primary-button mt-6 w-full justify-center py-3.5" onClick={finishWithAi} disabled={finishState === 'loading' || artworkUploadState === 'uploading'}><Sparkles size={17} /> {finishState === 'loading' ? 'Creating the final biodata…' : 'Apply my choices with AI'}</button>
       </Modal>}
     </main>
   );
