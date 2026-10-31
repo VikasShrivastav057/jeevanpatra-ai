@@ -223,7 +223,7 @@ export async function POST(request: Request) {
         const generated = JSON.parse(content) as unknown;
         const item = isRecord(generated) ? generated : {};
         const fieldUpdates = cleanFieldUpdates(item.fieldUpdates, sanitizedFields);
-        if (/\b(move|rename|replace|group|heading)\b/i.test(recommendation) && fieldUpdates.length === 0) {
+        if (/\b(move|rename|replace|group|heading)\b/i.test(recommendation) && /\b(fields?|phone|email|address|zip|sections?|labels?|details)\b/i.test(recommendation) && fieldUpdates.length === 0) {
           lastError = 'AI did not apply the requested field changes. Please retry with the field names and target section.';
           continue;
         }
