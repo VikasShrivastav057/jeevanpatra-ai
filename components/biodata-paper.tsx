@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import type { CSSProperties } from 'react';
 import { getTemplateById, type TemplateId } from '../lib/template-catalog';
+import type { DevotionalArtwork } from '../lib/devotional-artwork';
 
 export type FieldSection = 'personal' | 'family' | 'contact' | 'preferences';
 export type ProfileField = { id: string; label: string; value: string; section: FieldSection; group?: string };
@@ -8,7 +9,7 @@ export type BorderStyle = 'classic' | 'floral' | 'arch' | 'minimal' | 'rounded' 
 export type FrameStyle = 'template' | 'square' | 'rounded' | 'arch' | 'oval' | 'circle' | 'double';
 export type BackgroundStyle = 'template' | 'plain' | 'parchment' | 'dots' | 'geometric' | 'weave' | 'radiant';
 export type TemplateColors = { paper: string; primary: string; accent: string; text: string };
-export type TemplateDesign = { name: string; note: string; primary: string; accent: string; paper: string; text: string; borderStyle: BorderStyle; photoShape: 'circle' | 'rounded' | 'square'; layout: 'classic' | 'portrait-top'; fontStyle: 'classic' | 'modern' | 'traditional'; blessing: string; density?: 'compact' | 'balanced' | 'airy' };
+export type TemplateDesign = { name: string; note: string; primary: string; accent: string; paper: string; text: string; borderStyle: BorderStyle; photoShape: 'circle' | 'rounded' | 'square'; layout: 'classic' | 'portrait-top'; fontStyle: 'classic' | 'modern' | 'traditional'; blessing: string; density?: 'compact' | 'balanced' | 'airy'; artwork?: DevotionalArtwork };
 
 export function BiodataPaper({ template, photo, name, about, fields, design, frameStyle = 'template', backgroundStyle = 'template', colorOverride, compact = false }: { template: TemplateId; photo: string; name: string; about: string; fields: ProfileField[]; design?: TemplateDesign; frameStyle?: FrameStyle; backgroundStyle?: BackgroundStyle; colorOverride?: TemplateColors; compact?: boolean }) {
   const personal = fields.filter((field) => field.section === 'personal' && field.label.trim() && field.value.trim());
@@ -25,7 +26,7 @@ export function BiodataPaper({ template, photo, name, about, fields, design, fra
     : isAiTemplate
       ? ({ ...activeVariables, '--design-primary': activeColors.primary, '--design-accent': activeColors.accent, '--design-paper': activeColors.paper, '--design-text': activeColors.text } as CSSProperties)
       : (activeVariables as CSSProperties);
-  const designClasses = design ? `design-${design.borderStyle} photo-${design.photoShape} layout-${design.layout} font-${design.fontStyle} density-${design.density || 'balanced'}` : '';
+  const designClasses = design ? `design-${design.borderStyle} photo-${design.photoShape} layout-${design.layout} font-${design.fontStyle} density-${design.density || 'balanced'} ${template === 'mahadev-parvati-devotional' && design.artwork === 'mahadev-radha-krishna' ? 'artwork-mahadev-radha-krishna' : ''}` : '';
   const frameClass = frameStyle === 'template' ? '' : `frame-${frameStyle}`;
   const backgroundClass = backgroundStyle === 'template' ? '' : `background-${backgroundStyle}`;
   const classes = `bio-paper ${template} ${baseTemplate ? 'template-themed' : ''} ${isAiTemplate ? 'ai-custom' : ''} ${isAiFinished ? 'ai-finished' : ''} ${designClasses} ${frameClass} ${backgroundClass} ${compact ? 'compact' : ''}`;

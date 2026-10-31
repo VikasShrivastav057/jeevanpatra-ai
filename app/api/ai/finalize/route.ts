@@ -1,9 +1,11 @@
 import { getAppSession } from '../../../../lib/app-auth';
 import { runtimeEnv } from '../../../../lib/runtime-env';
+import { resolveDevotionalArtwork, type DevotionalArtwork } from '../../../../lib/devotional-artwork';
 
 type FieldSection = 'personal' | 'family' | 'contact' | 'preferences';
 type FieldSummary = { id: string; label: string; section: FieldSection; hasValue: boolean };
 type Design = {
+  artwork?: DevotionalArtwork;
   name: string;
   note: string;
   primary: string;
@@ -63,6 +65,7 @@ function cleanDesign(value: unknown): Design {
   const item = isRecord(value) ? value : {};
   const paper = typeof item.paper === 'string' && hex.test(item.paper) ? item.paper.toLowerCase() : fallback.paper;
   return {
+    artwork: item.artwork === 'mahadev-radha-krishna' ? item.artwork : 'template',
     name: typeof item.name === 'string' && item.name.trim() ? item.name.trim().slice(0, 30) : fallback.name,
     note: typeof item.note === 'string' && item.note.trim() ? item.note.trim().slice(0, 55) : fallback.note,
     primary: safeColor(item.primary, paper, 3, fallback.primary),
@@ -157,11 +160,12 @@ export async function POST(request: Request) {
   }
 
   const cleanOriginalIntroduction = introduction.trim();
+  const artwork = resolveDevotionalArtwork(recommendation, currentTemplate, isRecord(body.currentDesign) ? body.currentDesign.artwork : undefined);
   if (runtimeEnv.AI_TEST_MODE === 'true') {
     return Response.json({
       introduction: cleanOriginalIntroduction,
       fieldOrder: sanitizedFields.map((field) => field.id),
-      design: fallback,
+      design: { ...fallback, artwork },
       model: 'local-test',
     });
   }
@@ -232,7 +236,7 @@ export async function POST(request: Request) {
           fieldOrder: cleanFieldOrder(item.fieldOrder, sanitizedFields),
           fieldUpdates,
           changes: Array.isArray(item.changes) ? item.changes.filter((change): change is string => typeof change === 'string').slice(0, 8).map(change => change.slice(0, 180)) : [],
-          design: cleanDesign(item.design),
+          design: { ...cleanDesign(item.design), artwork },
         });
       } catch {
         lastError = 'Groq returned a result that could not be read.';
