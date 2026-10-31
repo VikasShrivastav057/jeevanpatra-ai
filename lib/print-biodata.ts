@@ -16,6 +16,7 @@ export async function printBiodata(paper: HTMLElement) {
   style.textContent = '@page{size:A4 portrait;margin:0}html,body{margin:0!important;padding:0!important;width:210mm!important;height:297mm!important;overflow:hidden!important;background:white}.bio-paper{box-sizing:border-box!important;width:210mm!important;max-width:none!important;min-width:0!important;height:297mm!important;min-height:0!important;max-height:297mm!important;margin:0!important;box-shadow:none!important;border-radius:0!important;overflow:hidden!important;break-inside:avoid;print-color-adjust:exact!important;-webkit-print-color-adjust:exact!important}';
   doc.head.appendChild(style);
   doc.body.appendChild(paper.cloneNode(true));
+  for (const image of doc.images) { image.loading = 'eager'; image.fetchPriority = 'high'; }
   try {
     await Promise.all(loads);
     await doc.fonts.ready;
@@ -29,3 +30,4 @@ export async function printBiodata(paper: HTMLElement) {
     frame.contentWindow!.print();
   } catch (error) { frame.remove(); throw error; }
 }
+
