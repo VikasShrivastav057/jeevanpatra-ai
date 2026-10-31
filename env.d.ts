@@ -1,5 +1,2 @@
-declare namespace Cloudflare {
-  interface Env {
-    FILES: R2Bucket;
-  }
-}
+/// <reference path="./db/env.d.ts" />
+

@@ -1,9 +1,9 @@
-import { env } from 'cloudflare:workers';
+import { runtimeEnv } from './runtime-env';
 
 type ProfileDocument = { id: string; ownerId: string; name: string; introduction: string; template: string; details: unknown };
 
 export async function upsertProfileInChroma(profile: ProfileDocument): Promise<'saved' | 'not_configured'> {
-  const config = env as unknown as Record<string, string | undefined>;
+  const config = runtimeEnv;
   const baseUrl = config.CHROMA_URL?.replace(/\/$/, '');
   const { CHROMA_API_KEY: apiKey, CHROMA_TENANT: tenant, CHROMA_DATABASE: database } = config;
   if (!baseUrl || !apiKey || !tenant || !database) return 'not_configured';
@@ -17,3 +17,4 @@ export async function upsertProfileInChroma(profile: ProfileDocument): Promise<'
   if (!upsertResponse.ok) throw new Error(`Chroma profile save failed (${upsertResponse.status})`);
   return 'saved';
 }
+

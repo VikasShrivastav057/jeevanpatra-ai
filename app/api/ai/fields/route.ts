@@ -1,5 +1,5 @@
-import { env } from 'cloudflare:workers';
 import { getAppSession, logActivity } from '../../../../lib/app-auth';
+import { runtimeEnv } from '../../../../lib/runtime-env';
 
 type FieldSection = 'personal' | 'family' | 'contact' | 'preferences';
 type SuggestedField = { label: string; value: string; section: FieldSection };
@@ -57,15 +57,15 @@ export async function POST(request: Request) {
   if (!text) return Response.json({ error: 'Describe the details you want to turn into fields.' }, { status: 400 });
   if (text.length > 4_000) return Response.json({ error: 'Keep the description under 4,000 characters.' }, { status: 400 });
 
-  if (env.AI_TEST_MODE === 'true') {
+  if (runtimeEnv.AI_TEST_MODE === 'true') {
     const fields = localTestFields(text);
     await logActivity({ session, action: 'ai_fields_generated', details: { fieldCount: fields.length, model: 'local-test' } });
     return Response.json({ fields, model: 'local-test' });
   }
 
-  const apiKey = env.GROQ_API_KEY;
+  const apiKey = runtimeEnv.GROQ_API_KEY;
   if (!apiKey) return Response.json({ error: 'Groq is not connected yet.' }, { status: 503 });
-  const models = [...new Set([env.GROQ_MODEL, 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'].filter(Boolean))] as string[];
+  const models = [...new Set([runtimeEnv.GROQ_MODEL, 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'].filter(Boolean))] as string[];
   let lastError = 'Groq could not create the fields.';
 
   for (const model of models) {
@@ -110,3 +110,4 @@ export async function POST(request: Request) {
 
   return Response.json({ error: lastError }, { status: 502 });
 }
+

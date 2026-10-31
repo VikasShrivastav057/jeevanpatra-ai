@@ -1,13 +1,14 @@
-import { env } from 'cloudflare:workers';
 import { createAppSession, getRequestAuditDetails, logActivity, verifyAdminPassword } from '../../../../lib/app-auth';
+import { database } from '../../../../lib/database';
+import { runtimeEnv } from '../../../../lib/runtime-env';
 
 export async function POST(request: Request) {
   let body: unknown;
   try { body = await request.json(); } catch { return denied(); }
   const email = typeof (body as { email?: unknown })?.email === 'string' ? (body as { email: string }).email.trim().toLowerCase() : '';
   const password = typeof (body as { password?: unknown })?.password === 'string' ? (body as { password: string }).password : '';
-  const expectedEmail = env.ADMIN_EMAIL?.trim().toLowerCase();
-  const recentFailures = await env.DB.prepare("SELECT COUNT(*) AS total FROM activity_logs WHERE action = 'admin_login_failed' AND created_at > ?")
+  const expectedEmail = runtimeEnv.ADMIN_EMAIL?.trim().toLowerCase();
+  const recentFailures = await database.prepare("SELECT COUNT(*)::int AS total FROM activity_logs WHERE action = 'admin_login_failed' AND created_at > ?")
     .bind(Date.now() - 15 * 60 * 1000).first<{ total?: number }>();
   if ((recentFailures?.total ?? 0) >= 10) return Response.json({ error: 'Too many admin sign-in attempts. Please wait 15 minutes.' }, { status: 429 });
   const validPassword = await verifyAdminPassword(password);
@@ -24,3 +25,4 @@ export async function POST(request: Request) {
 function denied() {
   return Response.json({ error: 'The admin email or password is incorrect.' }, { status: 401 });
 }
+

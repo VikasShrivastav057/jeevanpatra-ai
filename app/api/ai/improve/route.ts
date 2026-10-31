@@ -1,5 +1,5 @@
-import { env } from 'cloudflare:workers';
 import { getAppSession } from '../../../../lib/app-auth';
+import { runtimeEnv } from '../../../../lib/runtime-env';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -20,9 +20,9 @@ export async function POST(request: Request) {
     traditional: 'Use respectful, family-oriented language with a graceful traditional Indian biodata style in 45–75 words.',
   }[tone];
   if (!introduction || introduction.length > 1600) return Response.json({ error: 'Add a short introduction first.' }, { status: 400 });
-  const apiKey = (env as unknown as Record<string, string | undefined>).GROQ_API_KEY;
+  const apiKey = runtimeEnv.GROQ_API_KEY;
   if (!apiKey) return Response.json({ error: 'Groq is not connected yet. Add the Groq API key to activate AI writing.' }, { status: 503 });
-  const configuredModel = (env as unknown as Record<string, string | undefined>).GROQ_MODEL;
+  const configuredModel = runtimeEnv.GROQ_MODEL;
   const models = [...new Set([configuredModel, 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'].filter(Boolean))] as string[];
   let lastError = 'Groq could not complete the rewrite.';
 
@@ -69,3 +69,4 @@ export async function POST(request: Request) {
 
   return Response.json({ error: lastError }, { status: 502 });
 }
+

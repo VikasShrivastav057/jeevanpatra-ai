@@ -1,5 +1,6 @@
-import { env } from 'cloudflare:workers';
 import { headers } from 'next/headers';
+import { database } from './database';
+import { runtimeEnv } from './runtime-env';
 
 export type AppRole = 'customer' | 'admin';
 
@@ -17,19 +18,19 @@ const CUSTOMER_SESSION_MS = 7 * 24 * 60 * 60 * 1000;
 const ADMIN_SESSION_MS = 12 * 60 * 60 * 1000;
 
 export async function getAppSession(request?: Request): Promise<AppSession | null> {
-  const secret = env.SESSION_SECRET;
+  const secret = runtimeEnv.SESSION_SECRET;
   if (!secret) return null;
   const requestHeaders = request?.headers ?? await headers();
   const token = readCookie(requestHeaders.get('cookie'), SESSION_COOKIE);
   if (!token || token.length > 200) return null;
   const sessionId = await sha256Hex(`${token}:${secret}`);
-  const row = await env.DB.prepare(`SELECT s.id AS sessionId, s.user_id AS userId, s.role, s.identifier,
-      s.expires_at AS expiresAt, u.display_name AS displayName
+  const row = await database.prepare(`SELECT s.id AS "sessionId", s.user_id AS "userId", s.role, s.identifier,
+      s.expires_at AS "expiresAt", u.display_name AS "displayName"
     FROM auth_sessions s LEFT JOIN app_users u ON u.id = s.user_id
     WHERE s.id = ? LIMIT 1`).bind(sessionId).first<Record<string, unknown>>();
   if (!row || (row.role !== 'customer' && row.role !== 'admin') || typeof row.expiresAt !== 'number') return null;
   if (row.expiresAt <= Date.now()) {
-    await env.DB.prepare('DELETE FROM auth_sessions WHERE id = ?').bind(sessionId).run();
+    await database.prepare('DELETE FROM auth_sessions WHERE id = ?').bind(sessionId).run();
     return null;
   }
   return {
@@ -47,12 +48,12 @@ export async function createAppSession(input: {
   role: AppRole;
   identifier: string;
 }): Promise<{ cookie: string; session: AppSession }> {
-  if (!env.SESSION_SECRET) throw new Error('Session security is not configured.');
+  if (!runtimeEnv.SESSION_SECRET) throw new Error('Session security is not configured.');
   const token = randomToken(32);
-  const sessionId = await sha256Hex(`${token}:${env.SESSION_SECRET}`);
+  const sessionId = await sha256Hex(`${token}:${runtimeEnv.SESSION_SECRET}`);
   const now = Date.now();
   const expiresAt = now + (input.role === 'admin' ? ADMIN_SESSION_MS : CUSTOMER_SESSION_MS);
-  await env.DB.prepare(`INSERT INTO auth_sessions
+  await database.prepare(`INSERT INTO auth_sessions
     (id, user_id, role, identifier, created_at, expires_at, last_seen_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)`)
     .bind(sessionId, input.userId, input.role, input.identifier, now, expiresAt, now).run();
@@ -67,7 +68,7 @@ export function clearSessionCookie() {
 }
 
 export async function revokeAppSession(session: AppSession) {
-  await env.DB.prepare('DELETE FROM auth_sessions WHERE id = ?').bind(session.sessionId).run();
+  await database.prepare('DELETE FROM auth_sessions WHERE id = ?').bind(session.sessionId).run();
 }
 
 export async function logActivity(input: {
@@ -85,7 +86,7 @@ export async function logActivity(input: {
   let detailsJson = '{}';
   try { detailsJson = JSON.stringify(input.details ?? {}); } catch { detailsJson = '{}'; }
   if (detailsJson.length > 8_000) detailsJson = JSON.stringify({ note: 'Activity details exceeded the storage limit.' });
-  await env.DB.prepare(`INSERT INTO activity_logs
+  await database.prepare(`INSERT INTO activity_logs
     (id, user_id, actor_identifier, actor_role, action, biodata_id, details_json, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(`act_${crypto.randomUUID()}`, input.userId ?? session?.userId ?? null, identifier, role, input.action, input.biodataId ?? null, detailsJson, Date.now()).run();
@@ -110,7 +111,7 @@ export async function verifyCustomerPassword(password: string, stored: string) {
 }
 
 export async function verifyAdminPassword(password: string) {
-  const stored = env.ADMIN_PASSWORD_HASH;
+  const stored = runtimeEnv.ADMIN_PASSWORD_HASH;
   if (!stored || password.length > 300) return false;
   return verifyStoredPassword(password, stored);
 }
@@ -187,3 +188,4 @@ function maskIp(value: string) {
   const parts = value.split('.');
   return parts.length === 4 ? `${parts[0]}.${parts[1]}.${parts[2]}.0/24` : 'Unavailable';
 }
+

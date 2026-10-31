@@ -1,5 +1,5 @@
-import { env } from 'cloudflare:workers';
 import { getAppSession } from '../../../../lib/app-auth';
+import { runtimeEnv } from '../../../../lib/runtime-env';
 
 type Design = {
   name: string; note: string; primary: string; accent: string; paper: string; text: string;
@@ -64,9 +64,8 @@ export async function POST(request: Request) {
   if (idea.length > 1200) return Response.json({ error: 'Keep the design description under 1200 characters.' }, { status: 400 });
   if (referenceImage && (referenceImage.length > maxReferenceImageLength || !referenceImagePattern.test(referenceImage))) return Response.json({ error: 'Upload a valid JPG, PNG or WebP template image under 4 MB.' }, { status: 400 });
   if (!idea && !referenceImage) return Response.json({ error: 'Describe your design or upload a template reference.' }, { status: 400 });
-  const apiKey = (env as unknown as Record<string, string | undefined>).GROQ_API_KEY;
+  const apiKey = runtimeEnv.GROQ_API_KEY;
   if (!apiKey) return Response.json({ error: 'Groq is not connected yet.' }, { status: 503 });
-  const runtimeEnv = env as unknown as Record<string, string | undefined>;
   const models = referenceImage
     ? [...new Set([runtimeEnv.GROQ_VISION_MODEL, 'qwen/qwen3.8-27b'].filter(Boolean))] as string[]
     : [...new Set([runtimeEnv.GROQ_MODEL, 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'].filter(Boolean))] as string[];
@@ -105,3 +104,4 @@ export async function POST(request: Request) {
   }
   return Response.json({ error: lastError }, { status: 502 });
 }
+

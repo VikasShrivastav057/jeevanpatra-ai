@@ -1,5 +1,5 @@
-import { env } from 'cloudflare:workers';
 import { getAppSession } from '../../../../lib/app-auth';
+import { runtimeEnv } from '../../../../lib/runtime-env';
 
 type FieldSection = 'personal' | 'family' | 'contact' | 'preferences';
 type FieldSummary = { id: string; label: string; section: FieldSection; hasValue: boolean };
@@ -142,7 +142,7 @@ export async function POST(request: Request) {
   }
 
   const cleanOriginalIntroduction = introduction.trim();
-  if (env.AI_TEST_MODE === 'true') {
+  if (runtimeEnv.AI_TEST_MODE === 'true') {
     return Response.json({
       introduction: cleanOriginalIntroduction,
       fieldOrder: sanitizedFields.map((field) => field.id),
@@ -150,9 +150,9 @@ export async function POST(request: Request) {
       model: 'local-test',
     });
   }
-  const apiKey = (env as unknown as Record<string, string | undefined>).GROQ_API_KEY;
+  const apiKey = runtimeEnv.GROQ_API_KEY;
   if (!apiKey) return Response.json({ error: 'Groq is not connected yet.' }, { status: 503 });
-  const configuredModel = (env as unknown as Record<string, string | undefined>).GROQ_MODEL;
+  const configuredModel = runtimeEnv.GROQ_MODEL;
   const models = [...new Set([configuredModel, 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'].filter(Boolean))] as string[];
   let lastError = 'Groq could not finish the biodata.';
   const prompt = {

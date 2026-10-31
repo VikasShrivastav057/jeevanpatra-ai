@@ -1,6 +1,6 @@
-import { env } from 'cloudflare:workers';
 import { getAppSession, logActivity } from '../../../lib/app-auth';
 import { upsertProfileInChroma } from '../../../lib/chroma';
+import { database } from '../../../lib/database';
 import { builtInTemplateIds, type TemplateId } from '../../../lib/template-catalog';
 
 const validTemplates = new Set<TemplateId>([...builtInTemplateIds, 'ai-custom']);
@@ -39,8 +39,8 @@ export async function POST(request: Request) {
   const completed = body.completed === true;
   const now = Date.now();
   try {
-    const existing = await env.DB.prepare('SELECT id FROM biodata_profiles WHERE id = ? LIMIT 1').bind(id).first<{ id?: string }>();
-    await env.DB.prepare(`INSERT INTO biodata_profiles (id, owner_id, name, introduction, template, photo_key, profile_json, status, created_at, completed_at, updated_at)
+    const existing = await database.prepare('SELECT id FROM biodata_profiles WHERE id = ? LIMIT 1').bind(id).first<{ id?: string }>();
+    await database.prepare(`INSERT INTO biodata_profiles (id, owner_id, name, introduction, template, photo_key, profile_json, status, created_at, completed_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET name = excluded.name, introduction = excluded.introduction, template = excluded.template,
         photo_key = excluded.photo_key, profile_json = excluded.profile_json, status = excluded.status,
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
   if (!session) return Response.json({ error: 'Sign in required.' }, { status: 401 });
   if (session.role !== 'customer' || !session.userId) return Response.json({ error: 'Customer account required.' }, { status: 403 });
   try {
-    const row = await env.DB.prepare('SELECT id, name, introduction, template, photo_key AS photoKey, profile_json AS profileJson, status, completed_at AS completedAt, updated_at AS updatedAt FROM biodata_profiles WHERE owner_id = ? LIMIT 1').bind(session.userId).first<Record<string, unknown>>();
+    const row = await database.prepare('SELECT id, name, introduction, template, photo_key AS "photoKey", profile_json AS "profileJson", status, completed_at AS "completedAt", updated_at AS "updatedAt" FROM biodata_profiles WHERE owner_id = ? LIMIT 1').bind(session.userId).first<Record<string, unknown>>();
     if (!row) return Response.json({ profile: null });
     let details: unknown = {};
     try { details = typeof row.profileJson === 'string' ? JSON.parse(row.profileJson) : {}; } catch { details = {}; }
@@ -71,3 +71,4 @@ export async function GET(request: Request) {
     return Response.json({ error: 'Storage is temporarily unavailable. Please try again.' }, { status: 503 });
   }
 }
+

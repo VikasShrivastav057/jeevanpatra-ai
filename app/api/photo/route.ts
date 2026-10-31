@@ -1,4 +1,4 @@
-import { env } from 'cloudflare:workers';
+import { put } from '@vercel/blob';
 import { getAppSession } from '../../../lib/app-auth';
 
 export async function POST(request: Request) {
@@ -11,7 +11,16 @@ export async function POST(request: Request) {
   if (!(photo instanceof File) || !['image/jpeg', 'image/png'].includes(photo.type) || photo.size > 5_000_000) return Response.json({ error: 'Choose a JPG or PNG under 5 MB.' }, { status: 400 });
   const extension = photo.type === 'image/png' ? 'png' : 'jpg';
   const key = `profiles/${session.userId}/portrait.${extension}`;
-  try { await env.FILES.put(key, photo.stream(), { httpMetadata: { contentType: photo.type } }); }
+  try {
+    await put(key, photo, {
+      access: 'private',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: photo.type,
+      cacheControlMaxAge: 60,
+    });
+  }
   catch { return Response.json({ error: 'Photo storage is temporarily unavailable.' }, { status: 503 }); }
   return Response.json({ key, url: `/api/photo/portrait.${extension}`, status: 'uploaded' });
 }
+
