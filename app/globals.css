@@ -170,9 +170,9 @@
 .bio-paper .uploaded-artwork img{object-fit:contain;object-position:center}
 .bio-paper .uploaded-artwork.artwork-size-small{height:12cqw}
 .bio-paper .uploaded-artwork.artwork-size-large{height:25cqw}
-.bio-paper .uploaded-artwork.artwork-placement-replace-header{position:absolute;top:1.5%;right:4%;width:54%;height:36%;min-height:0;border-radius:3%}
+.bio-paper .uploaded-artwork.artwork-placement-replace-header{position:absolute;top:1.5%;right:4%;width:52%;height:33%;min-height:0;border-radius:3%}
 .bio-paper .uploaded-artwork.artwork-placement-replace-header.artwork-size-small{top:7%;right:7%;width:43%;height:27%}
-.bio-paper .uploaded-artwork.artwork-placement-replace-header.artwork-size-large{top:1%;right:3%;width:56%;height:37%}
+.bio-paper .uploaded-artwork.artwork-placement-replace-header.artwork-size-large{top:1%;right:3%;width:53%;height:33.5%}
 .bio-paper.radha-krishna-devotional .uploaded-artwork.artwork-placement-replace-header{top:1%;height:27%}
 .bio-paper.radha-krishna-devotional .uploaded-artwork.artwork-placement-replace-header.artwork-size-small{top:4%;height:22%}
 .bio-paper.radha-krishna-devotional .uploaded-artwork.artwork-placement-replace-header.artwork-size-large{top:.5%;height:28%}
