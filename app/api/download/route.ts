@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   const profile = await database.prepare(`SELECT id, name, template, status, completed_at AS "completedAt"
     FROM biodata_profiles WHERE owner_id = ? LIMIT 1`).bind(ownerId).first<Record<string, unknown>>();
   if (!profile || profile.status !== 'completed' || typeof profile.completedAt !== 'number') {
-    return Response.json({ error: 'Finish the biodata with AI and save it before downloading.' }, { status: 409 });
+    return Response.json({ error: 'Save your completed biodata before downloading.' }, { status: 409 });
   }
   await logActivity({ session, action: 'download', biodataId: typeof profile.id === 'string' ? profile.id : null, details: { format: 'print_pdf', template: profile.template, name: profile.name, ...getRequestAuditDetails(request) } });
   return Response.json({ allowed: true });

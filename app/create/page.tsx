@@ -450,20 +450,20 @@ export default function Home() {
     setPhotoCropRadius(frame ? getComputedStyle(frame).borderRadius : '50%'); setPhotoCropOpen(true);
   }
   async function saveProfile() {
-    if (photoUploadRequest.current || artworkUploadState === 'uploading') return;
+    if (photoUploadRequest.current || artworkUploadState === 'uploading') return false;
     setSaveError('');
     if (!name.trim()) {
       setSaveState('Add your name'); setSaveError('Add your full name before saving.'); nameInput.current?.focus();
-      setTimeout(() => setSaveState('Save my biodata'), 2200); return;
+      setTimeout(() => setSaveState('Save my biodata'), 2200); return false;
     }
     setSaveState('Saving…');
     try {
-      const completed = isCompleted || sameExceptPhotoAdjustment(completedSignature, currentCompletionSignature);
-      await persistProfile({ completed, signature: completed ? currentCompletionSignature : '' });
-      if (completed) setCompletedSignature(currentCompletionSignature);
+      await persistProfile({ completed: true, signature: currentCompletionSignature });
+      setCompletedSignature(currentCompletionSignature);
       setAccountState('signed-in'); setSaveState('Saved ✓');
-    } catch (error) { setSaveState('Try again'); setSaveError(error instanceof Error ? error.message : 'Your biodata could not be saved.'); }
+    } catch (error) { setSaveState('Try again'); setSaveError(error instanceof Error ? error.message : 'Your biodata could not be saved.'); return false; }
     setTimeout(() => setSaveState('Save my biodata'), 2200);
+    return true;
   }
   async function persistProfile(input: { completed: boolean; signature: string; nextAbout?: string; nextFields?: ProfileField[]; nextCustomDesign?: TemplateDesign; nextFinishDesign?: TemplateDesign; nextFrameStyle?: FrameStyle; nextBackgroundStyle?: BackgroundStyle; nextColorPreset?: ColorPresetId; nextColors?: TemplateColors; nextArtwork?: UploadedArtwork }) {
     const response = await fetch('/api/biodata', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
@@ -482,12 +482,13 @@ export default function Home() {
     setSaveError('');
     if (photoUploadRequest.current || artworkUploadState === 'uploading') { setSaveError('Wait for the image upload to finish before downloading.'); return; }
     if (accountState !== 'signed-in') { window.location.href = `/login?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
-    if (!isCompleted) { setSaveError(photoChangesNeedSave ? 'Save your photo adjustments first. No new AI finishing is needed.' : 'Finish the biodata with AI and save the final result before downloading.'); document.getElementById(photoChangesNeedSave ? 'editor' : 'ai-finish')?.scrollIntoView({ behavior: 'smooth' }); return; }
     setDownloadState('checking');
     try {
+      if (!isCompleted && !await saveProfile()) return;
       const response = await fetch('/api/download', { method: 'POST' });
       const data = await response.json().catch(() => ({})) as { allowed?: boolean; error?: string };
       if (!response.ok || !data.allowed) throw new Error(data.error || 'The download could not be started.');
+      if (latestFinishSignature.current !== currentCompletionSignature) throw new Error('Your biodata changed while saving. Save and download again to include your latest changes.');
       const paper = document.querySelector<HTMLElement>('.preview-shell .bio-paper');
       if (!paper) throw new Error('The biodata preview is not ready. Please retry.');
       await printBiodata(paper);
@@ -716,7 +717,7 @@ export default function Home() {
 
       <section id="editor" className="border-y border-[#29483f17] bg-[#f2ede2] px-4 py-14 lg:px-8 lg:py-20">
         <div className="mx-auto max-w-[1480px]">
-          <div className="mb-8 flex flex-wrap items-end justify-between gap-5"><div><span className="eyebrow"><Sparkles size={14} /> Live studio</span><h2 className="mt-4 font-serif text-4xl lg:text-5xl">Make it yours.</h2><p className="mt-2 text-[var(--muted)]">Edit the details and watch your biodata come to life.</p></div><div className="print:hidden"><div className="flex flex-wrap justify-end gap-2"><button className="soft-button" onClick={() => void downloadCompletedBiodata()} disabled={downloadState === 'checking'}>{downloadState === 'checking' ? 'Checking…' : isCompleted ? 'Download PDF' : photoChangesNeedSave ? 'Save photo changes first' : 'Download after finishing'}</button><button className="primary-button" onClick={() => void saveProfile()} disabled={saveState === 'Saving…' || photoState === 'uploading' || artworkUploadState === 'uploading'}>{saveState}</button><span className="sr-only" aria-live="polite">{saveState}</span></div><p className={`completion-note ${isCompleted ? 'ready' : ''}`}>{isCompleted ? 'Completed and ready to download.' : photoChangesNeedSave ? 'Save your photo adjustments to download. No new AI finishing is needed.' : 'Complete AI finishing before download is enabled.'}</p>{saveError && <p className="mt-2 max-w-[380px] text-right text-xs font-bold text-[#9d3030]" role="alert">{saveError}</p>}</div></div>
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-5"><div><span className="eyebrow"><Sparkles size={14} /> Live studio</span><h2 className="mt-4 font-serif text-4xl lg:text-5xl">Make it yours.</h2><p className="mt-2 text-[var(--muted)]">Edit the details and watch your biodata come to life.</p></div><div className="print:hidden"><div className="flex flex-wrap justify-end gap-2"><button className="soft-button" onClick={() => void downloadCompletedBiodata()} disabled={downloadState === 'checking' || saveState === 'Saving…' || photoState === 'uploading' || artworkUploadState === 'uploading'}>{downloadState === 'checking' ? 'Preparing PDF…' : isCompleted ? 'Download PDF' : 'Save & download PDF'}</button><button className="primary-button" onClick={() => void saveProfile()} disabled={saveState === 'Saving…' || downloadState === 'checking' || photoState === 'uploading' || artworkUploadState === 'uploading'}>{saveState}</button><span className="sr-only" aria-live="polite">{saveState}</span></div><p className={`completion-note ${isCompleted ? 'ready' : ''}`}>{isCompleted ? 'Completed and ready to download.' : photoChangesNeedSave ? 'Save and download your latest photo adjustments. AI finishing is optional.' : 'Happy with the preview? Save and download directly. AI finishing is optional.'}</p>{saveError && <p className="mt-2 max-w-[380px] text-right text-xs font-bold text-[#9d3030]" role="alert">{saveError}</p>}</div></div>
           <div className="studio-grid grid gap-5 xl:grid-cols-[320px_minmax(500px,1fr)_280px]">
             <aside className="editor-panel print:hidden">
               <div className="panel-title"><span>01</span> Your details</div>
@@ -787,7 +788,7 @@ export default function Home() {
             </aside>
           </div>
           <div className="ai-field-builder-card print:hidden"><div><span className="finish-number">07</span><div><p className="eyebrow"><ListPlus size={14} /> AI field builder</p><h2>Turn your sentences into editable fields.</h2><p>Paste partner preferences or any other details. AI will separate them into field names and values for you to review before anything is added to the template.</p></div></div><button className="soft-button" onClick={() => { setFieldBuilderError(''); setFieldBuilderOpen(true); }}>Create fields with AI <Sparkles size={17} /></button></div>
-          <div id="ai-finish" className="ai-finish-card print:hidden"><div><span className="finish-number">08</span><div><p className="eyebrow"><Sparkles size={14} /> Final step</p><h2>Let AI finish the complete biodata.</h2><p>Describe your changes, review the exact edits, then save. Your other settings and personal facts stay protected.</p>{lastFinishChanges.length > 0 && <output className="mt-2 block text-xs">Saved changes: {lastFinishChanges.join(', ')}.</output>}</div></div><button className="primary-button" onClick={() => setFinishOpen(true)}>Finish my biodata <WandSparkles size={17} /></button></div>
+          <div id="ai-finish" className="ai-finish-card print:hidden"><div><span className="finish-number">08</span><div><p className="eyebrow">Ready when you are</p><h2>Save and download your biodata.</h2><p>{isCompleted ? 'Completed and saved. Download your PDF directly.' : 'Happy with the preview? Save and download it as it is. AI finishing is optional.'}</p>{lastFinishChanges.length > 0 && <output className="mt-2 block text-xs">Saved changes: {lastFinishChanges.join(', ')}.</output>}{saveError && <p className="ai-error" role="alert">{saveError}</p>}</div></div><div className="flex flex-wrap gap-3"><button className="primary-button" onClick={() => void downloadCompletedBiodata()} disabled={downloadState === 'checking' || saveState === 'Saving…' || photoState === 'uploading' || artworkUploadState === 'uploading'}>{downloadState === 'checking' ? 'Preparing PDF…' : isCompleted ? 'Download PDF' : 'Save & download PDF'}</button><button className="soft-button" onClick={() => setFinishOpen(true)}>Finish my biodata <WandSparkles size={17} /></button></div></div>
         </div>
       </section>
 
@@ -894,4 +895,3 @@ function Modal({ children, onClose, label, wide = false, busy = false }: { child
   function close() { if (dialog.current?.open) dialog.current.close(); else onClose(); }
   return <dialog ref={dialog} className={`modal-card ${wide ? 'wide' : ''}`} aria-label={label} aria-modal="true" onCancel={event => { if (busy) event.preventDefault(); }} onClose={onClose}><button className="modal-close" disabled={busy} onClick={close} aria-label="Close dialog"><X size={18} /></button>{children}</dialog>;
 }
-
