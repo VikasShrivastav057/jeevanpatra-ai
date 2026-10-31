@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowDown, ArrowUp, Check, ChevronDown, LayoutTemplate, ListPlus, Menu, Palette, Plus, Sparkles, Trash2, Upload, WandSparkles, X } from 'lucide-react';
 import { builtInTemplateIds, getTemplateById, templateCatalog, type TemplateId } from '../../lib/template-catalog';
 import { readApiResponse } from '../../lib/read-api-response';
+import { printBiodata } from '../../lib/print-biodata';
 import { BiodataPaper, type BackgroundStyle, type FieldSection, type FrameStyle, type ProfileField, type TemplateColors, type TemplateDesign } from '../../components/biodata-paper';
 
 type AiTone = 'warm' | 'concise' | 'traditional';
@@ -413,7 +414,9 @@ export default function Home() {
       const response = await fetch('/api/download', { method: 'POST' });
       const data = await response.json().catch(() => ({})) as { allowed?: boolean; error?: string };
       if (!response.ok || !data.allowed) throw new Error(data.error || 'The download could not be started.');
-      window.print();
+      const paper = document.querySelector<HTMLElement>('.preview-shell .bio-paper');
+      if (!paper) throw new Error('The biodata preview is not ready. Please retry.');
+      await printBiodata(paper);
     } catch (error) { setSaveError(error instanceof Error ? error.message : 'The download could not be started.'); }
     finally { setDownloadState('idle'); }
   }
@@ -549,13 +552,16 @@ export default function Home() {
         selectedAreas.length ? `Change these specific areas: ${selectedAreas.join(', ')}.` : 'Do not change the visual design unless needed to follow the written instruction.',
         `Improvement approach: ${improvementInstruction}`,
       ].filter(Boolean).join(' ');
-      const response = await fetch('/api/ai/finalize', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, introduction: about, fields: fieldSummary, stylePreference, recommendation: finishingRecommendation, currentTemplate: `${template}: ${active.name}` }) });
-      const data = await readApiResponse<{ introduction?: string; fieldOrder?: string[]; design?: TemplateDesign }>(response, 'AI could not finish this biodata.');
+      const response = await fetch('/api/ai/finalize', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, introduction: about, fields: fieldSummary, stylePreference, recommendation: finishingRecommendation, currentTemplate: `${template}: ${active.name}`, currentDesign: finishDesign || customDesign }) });
+      const data = await readApiResponse<{ introduction?: string; fieldOrder?: string[]; design?: TemplateDesign; fieldUpdates?: Array<{ id: string; label?: string; section?: FieldSection; group?: string }> }>(response, 'AI could not finish this biodata.');
       if (!response.ok || typeof data.introduction !== 'string' || !data.fieldOrder || !data.design) throw new Error(data.error || 'AI could not finish this biodata.');
       const fieldById = new Map(profileFields.map((field) => [field.id, field]));
       const reordered = data.fieldOrder.map((id) => fieldById.get(id)).filter((field): field is ProfileField => Boolean(field));
       const untouched = profileFields.filter((field) => !data.fieldOrder!.includes(field.id));
-      const nextFields = [...reordered, ...untouched];
+      const nextFields = [...reordered, ...untouched].map(field => {
+        const update = data.fieldUpdates?.find(item => item.id === field.id);
+        return update ? { ...field, ...update, value: field.value } : field;
+      });
       const nextCustomDesign = template === 'ai-custom' ? data.design : customDesign;
       const nextFinishDesign = template === 'ai-custom' ? undefined : data.design;
       const signature = completionSignature({ name, about: data.introduction, profileFields: nextFields, template, customDesign: nextCustomDesign, finishDesign: nextFinishDesign, frameStyle, backgroundStyle, colorPreset, customColors });
@@ -726,4 +732,3 @@ function Modal({ children, onClose, label, wide = false }: { children: React.Rea
   function close() { if (dialog.current?.open) dialog.current.close(); else onClose(); }
   return <dialog ref={dialog} className={`modal-card ${wide ? 'wide' : ''}`} aria-label={label} aria-modal="true" onClose={onClose}><button className="modal-close" onClick={close} aria-label="Close dialog"><X size={18} /></button>{children}</dialog>;
 }
-

@@ -20,7 +20,7 @@ export async function GET(request: Request) {
       LEFT JOIN biodata_profiles p ON p.owner_id = u.id
       LEFT JOIN activity_logs a ON a.user_id = u.id
       GROUP BY u.id ORDER BY u.last_login_at DESC LIMIT 100`).all<Record<string, unknown>>(),
-    database.prepare(`SELECT p.id, p.owner_id AS "ownerId", u.identifier, p.name, p.introduction, p.template,
+    database.prepare(`SELECT p.id, p.owner_id AS "ownerId", COALESCE(u.identifier, CASE WHEN p.owner_id = 'admin_primary' THEN 'Administrator' END) AS identifier, p.name, p.introduction, p.template,
       p.profile_json AS "profileJson", p.status, p.created_at AS "createdAt", p.completed_at AS "completedAt", p.updated_at AS "updatedAt"
       FROM biodata_profiles p LEFT JOIN app_users u ON u.id = p.owner_id
       ORDER BY p.updated_at DESC LIMIT 100`).all<Record<string, unknown>>(),
@@ -41,4 +41,3 @@ function parseJson(value: unknown) {
   if (typeof value !== 'string') return {};
   try { return JSON.parse(value) as unknown; } catch { return {}; }
 }
-

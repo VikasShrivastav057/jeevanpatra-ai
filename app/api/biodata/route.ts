@@ -1,4 +1,4 @@
-import { getAppSession, logActivity } from '../../../lib/app-auth';
+import { getAppSession, getStudioOwnerId, logActivity } from '../../../lib/app-auth';
 import { upsertProfileInChroma } from '../../../lib/chroma';
 import { database } from '../../../lib/database';
 import { builtInTemplateIds, type TemplateId } from '../../../lib/template-catalog';
@@ -16,7 +16,8 @@ function invalid(message: string) {
 export async function POST(request: Request) {
   const session = await getAppSession(request);
   if (!session) return Response.json({ error: 'Sign in to save your biodata.' }, { status: 401 });
-  if (session.role !== 'customer' || !session.userId) return Response.json({ error: 'A customer account is required to save biodata.' }, { status: 403 });
+  const ownerId = getStudioOwnerId(session);
+  if (!ownerId) return Response.json({ error: 'A signed-in account is required to save biodata.' }, { status: 403 });
 
   let body: unknown;
   try { body = await request.json(); } catch { return invalid('The biodata could not be read.'); }
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
   try { profileJson = JSON.stringify(body.details ?? {}); } catch { return invalid('The profile details could not be saved.'); }
   if (profileJson.length > 200_000) return invalid('The profile contains too much information.');
 
-  const id = `bio_${session.userId}`;
+  const id = `bio_${ownerId}`;
   const completed = body.completed === true;
   const now = Date.now();
   try {
@@ -45,23 +46,24 @@ export async function POST(request: Request) {
       ON CONFLICT(id) DO UPDATE SET name = excluded.name, introduction = excluded.introduction, template = excluded.template,
         photo_key = excluded.photo_key, profile_json = excluded.profile_json, status = excluded.status,
         completed_at = excluded.completed_at, updated_at = excluded.updated_at`)
-      .bind(id, session.userId, name, introduction, template, photoKey ?? null, profileJson, completed ? 'completed' : 'draft', now, completed ? now : null, now).run();
+      .bind(id, ownerId, name, introduction, template, photoKey ?? null, profileJson, completed ? 'completed' : 'draft', now, completed ? now : null, now).run();
     await logActivity({ session, action: existing?.id ? 'biodata_updated' : 'biodata_created', biodataId: id, details: { name, template, status: completed ? 'completed' : 'draft' } });
   } catch {
     return Response.json({ error: 'Storage is temporarily unavailable. Please try again.' }, { status: 503 });
   }
 
   let chroma: 'saved' | 'not_configured' | 'unavailable' = 'not_configured';
-  try { chroma = await upsertProfileInChroma({ id, ownerId: session.userId, name, introduction, template, details: body.details }); } catch { chroma = 'unavailable'; }
+  try { chroma = await upsertProfileInChroma({ id, ownerId, name, introduction, template, details: body.details }); } catch { chroma = 'unavailable'; }
   return Response.json({ id, status: completed ? 'completed' : 'draft', chroma });
 }
 
 export async function GET(request: Request) {
   const session = await getAppSession(request);
   if (!session) return Response.json({ error: 'Sign in required.' }, { status: 401 });
-  if (session.role !== 'customer' || !session.userId) return Response.json({ error: 'Customer account required.' }, { status: 403 });
+  const ownerId = getStudioOwnerId(session);
+  if (!ownerId) return Response.json({ error: 'A signed-in account is required.' }, { status: 403 });
   try {
-    const row = await database.prepare('SELECT id, name, introduction, template, photo_key AS "photoKey", profile_json AS "profileJson", status, completed_at AS "completedAt", updated_at AS "updatedAt" FROM biodata_profiles WHERE owner_id = ? LIMIT 1').bind(session.userId).first<Record<string, unknown>>();
+    const row = await database.prepare('SELECT id, name, introduction, template, photo_key AS "photoKey", profile_json AS "profileJson", status, completed_at AS "completedAt", updated_at AS "updatedAt" FROM biodata_profiles WHERE owner_id = ? LIMIT 1').bind(ownerId).first<Record<string, unknown>>();
     if (!row) return Response.json({ profile: null });
     let details: unknown = {};
     try { details = typeof row.profileJson === 'string' ? JSON.parse(row.profileJson) : {}; } catch { details = {}; }
@@ -71,4 +73,3 @@ export async function GET(request: Request) {
     return Response.json({ error: 'Storage is temporarily unavailable. Please try again.' }, { status: 503 });
   }
 }
-

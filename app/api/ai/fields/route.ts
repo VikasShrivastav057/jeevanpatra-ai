@@ -49,7 +49,6 @@ function localTestFields(text: string) {
 export async function POST(request: Request) {
   const session = await getAppSession(request);
   if (!session) return Response.json({ error: 'Please sign in before creating fields with AI.' }, { status: 401 });
-  if (session.role !== 'customer') return Response.json({ error: 'A customer account is required.' }, { status: 403 });
 
   let body: unknown;
   try { body = await request.json(); } catch { return Response.json({ error: 'The field request could not be read.' }, { status: 400 }); }
@@ -110,4 +109,3 @@ export async function POST(request: Request) {
 
   return Response.json({ error: lastError }, { status: 502 });
 }
-

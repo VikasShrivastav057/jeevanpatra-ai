@@ -13,6 +13,12 @@ export type AppSession = {
   expiresAt: number;
 };
 
+const ADMIN_STUDIO_OWNER_ID = 'admin_primary';
+
+export function getStudioOwnerId(session: AppSession) {
+  return session.role === 'admin' ? ADMIN_STUDIO_OWNER_ID : session.userId;
+}
+
 const SESSION_COOKIE = 'jp_session';
 const CUSTOMER_SESSION_MS = 7 * 24 * 60 * 60 * 1000;
 const ADMIN_SESSION_MS = 12 * 60 * 60 * 1000;
@@ -188,4 +194,3 @@ function maskIp(value: string) {
   const parts = value.split('.');
   return parts.length === 4 ? `${parts[0]}.${parts[1]}.${parts[2]}.0/24` : 'Unavailable';
 }
-
