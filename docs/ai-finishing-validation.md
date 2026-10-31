@@ -10,6 +10,7 @@ Implemented 31 October 2026.
 - Field values, profile photo files, selected templates and uploaded image files cannot be replaced by the planner. Images are not sent to Groq. Only field summaries, the introduction, visual settings and the customer's written request are sent.
 - The customer reviews an actual computed before/after list before saving. Discard, cancel and stale responses cannot apply changes. Failed persistence leaves the editor unchanged and allows retry.
 - Current manual colour settings, original gradient paper, existing groups and earlier blessing/artwork edits survive unrelated requests.
+- Devotional text can be nudged independently with `design.blessingOffsetX` and `design.blessingOffsetY`. These bounded offsets translate only the editable text, including on illustrated templates; they preserve its font, size, colour, content, other layout positions and background artwork. Small unquantified directional requests are resolved directly; quantified/compound requests use the planner. Moving unrelated text or moving against the requested direction is rejected. Restoring the original blessing position uses zero offsets. Offsets are saved and preserved through later unrelated AI edits and PDF output.
 - Raster illustration changes that cannot be rendered independently are explained instead of silently replacing the design. Uploaded artwork size and placement, supported devotional variants, editable colours/fonts/spacing/frames/prints and field organisation remain available.
 
 ## Automated evidence
@@ -24,6 +25,7 @@ Additional checks performed during implementation:
 - Desktop customer and mobile admin browser journeys: review, discard, changed-prompt invalidation, close during generation, provider error, save failure, retry, apply and reload. No client exceptions in those journeys.
 - Authentication and malformed-request boundaries, duplicate/unknown field IDs, forbidden personal values and uploaded-file sources in summaries.
 - TypeScript check, focused lint and production build.
+- Exact regression prompt to move “Jai Shri RadhaKrishna” slightly downward and right: all three devotional artwork modes at desktop and mobile widths. Review lists only the two offsets; font, colour, content, artwork and other positions remain unchanged. Save/reload and one-page A4 PDF verified, with before/after visual inspection showing the first word clear of the hanging leaves. Real Groq checks cover quantified movement from an existing offset, preservation through a later font edit, and explicit position reset.
 
 Live release verification uses a synthetic customer profile and restores its original content afterward. It checks review without saving, exact blessing apply/save, a real Groq colour edit with manual-palette preservation, reload, download authorisation and the isolated PDF print document.
 

@@ -11,6 +11,34 @@ function run(instruction: string, operations: unknown[], override: Partial<Finis
 function rejected(instruction: string, operations: unknown[], override: Partial<FinishContext> = {}) { count++; const ctx = structuredClone({ ...baseline, ...override, instruction }); const snapshot = structuredClone(ctx); assert.throws(() => applyFinishingPlan({ operations, unfulfilled: [] }, ctx), FinishingPlanError); assert.deepEqual(ctx, snapshot); }
 const op = (target: string, value: unknown, evidence: string, id?: string) => ({ target, value, evidence, ...(id ? { id } : {}) });
 const exact = 'Replace the existing text “ॐ नमः शिवाय” with “Jai Shri RadhaKrishna”. Keep it in the same position, with a similar elegant and devotional style, matching the overall biodata theme. Ensure the new text is clear, balanced, and properly aligned. Do not change any other part of the design.';
+const move = 'Move the text “Jai Shri RadhaKrishna” slightly downward and a little to the right so the word “Jai” becomes fully visible and clear. Keep the same font style, color, devotional look, and overall design theme. Make sure the full text is properly readable, well aligned, and not overlapping with the background or decorative elements. Do not change anything else in the biodata design.';
+const moveDesign = { ...baseline.design, blessingOverride: 'Jai Shri RadhaKrishna' };
+for (const artwork of ['template', 'mahadev-radha-krishna', 'radha-krishna-replacement'] as const) {
+ const ctx = { ...baseline, instruction: move, design: { ...moveDesign, artwork } }; const saved = structuredClone(ctx);
+ const result = applyFinishingPlan(directFinishingPlan(ctx), ctx); count++;
+ assert.equal(result.design.blessingOffsetX, 2); assert.equal(result.design.blessingOffsetY, 3); assert.equal(result.changes.length, 2);
+ const { blessingOffsetX: _x, blessingOffsetY: _y, editedProperties: _edited, ...other } = result.design; const { editedProperties: _priorEdited, ...original } = ctx.design;
+ assert.deepEqual(other, original); assert.deepEqual(result.visuals, ctx.visuals); assert.deepEqual(result.fieldUpdates, []); assert.deepEqual(result.fieldOrder, ctx.fields.map(f => f.id)); assert.equal(result.introduction, ctx.introduction); assert.deepEqual(ctx, saved);
+}
+for (const [instruction, x, y] of [['Move the blessing text slightly down.', undefined, 3], ['Nudge the blessing text to the left.', -2, undefined], ['Move the blessing text up and right.', 2, -3]] as const) {
+ const ctx = { ...baseline, instruction, design: moveDesign }; const result = applyFinishingPlan(directFinishingPlan(ctx), ctx); count++; assert.equal(result.design.blessingOffsetX, x); assert.equal(result.design.blessingOffsetY, y);
+}
+for (const instruction of ['Move “Jai Shri RadhaKrishna” slightly down.', 'Lower the blessing text slightly.']) { const ctx = { ...baseline, instruction, design: moveDesign }; assert.equal(applyFinishingPlan(directFinishingPlan(ctx), ctx).design.blessingOffsetY, 3); count++; }
+const repeated = applyFinishingPlan(directFinishingPlan({ ...baseline, instruction: move, design: { ...moveDesign, blessingOffsetX: 2, blessingOffsetY: 3 } }), { ...baseline, instruction: move, design: { ...moveDesign, blessingOffsetX: 2, blessingOffsetY: 3 } }); count++; assert.equal(repeated.design.blessingOffsetX, 4); assert.equal(repeated.design.blessingOffsetY, 6);
+assert.equal(directFinishingPlan({ ...baseline, design: moveDesign, instruction: move + ' Also use a modern font.' }), undefined); count++;
+assert.equal(directFinishingPlan({ ...baseline, design: moveDesign, instruction: 'Move the text "Full Name" slightly down.' }), undefined); count++;
+assert.equal(directFinishingPlan({ ...baseline, design: moveDesign, instruction: 'Move the blessing text 2% right.' }), undefined); count++;
+assert.equal(directFinishingPlan({ ...baseline, design: moveDesign, instruction: 'Move the blessing text down. Keep the font and also change the paper colour.' }), undefined); count++;
+assert.equal(directFinishingPlan({ ...baseline, design: moveDesign, instruction: 'Lower the blessing font size.' }), undefined); count++;
+assert.equal(directFinishingPlan({ ...baseline, design: moveDesign, instruction: 'Use lower-case blessing text.' }), undefined); count++;
+rejected('Lower the blessing font size.', [op('design.blessingOffsetY', 3, 'Lower the blessing font size')], { design: moveDesign });
+const downEvidence = 'Move the blessing text down';
+for (const value of [-5, 9, NaN, Infinity, '3', null]) rejected(downEvidence, [op('design.blessingOffsetY', value, downEvidence)], { design: moveDesign });
+rejected('Move the blessing text to the right.', [op('design.blessingOffsetX', -2, 'Move the blessing text to the right')], { design: moveDesign });
+rejected('Move the text "Full Name" down.', [op('design.blessingOffsetY', 3, 'Move the text "Full Name" down')], { design: moveDesign });
+rejected('Move the blessing text down. Keep the blessing position unchanged.', [op('design.blessingOffsetY', 3, downEvidence)], { design: moveDesign });
+rejected(move, [op('design.blessingOffsetY', 3, move)], { design: moveDesign });
+rejected('Improve the overall balance and readability.', [op('design.blessingOffsetY', 3, '$selected:header')], { design: moveDesign, targets: ['header'], mode: 'best-version' });
 for (const artwork of ['template', 'mahadev-radha-krishna', 'radha-krishna-replacement'] as const) {
  const ctx = structuredClone({ ...baseline, instruction: exact, design: { ...baseline.design, artwork } });
  const r = applyFinishingPlan(directFinishingPlan(ctx), ctx); count++;

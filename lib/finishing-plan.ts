@@ -2,6 +2,7 @@ import type { TemplateDesign, FrameStyle, BackgroundStyle, TemplateColors } from
 import type { UploadedArtwork } from './uploaded-artwork';
 import { requestsDevotionalArtwork, resolveDevotionalArtwork } from './devotional-artwork';
 import { readBlessingEdit } from './blessing-edit';
+import { blessingMoveDirections, isBlessingOffset, referencesBlessing, unquotedPositionInstruction } from './blessing-position';
 
 export const finishTargets = ['layout', 'colors', 'typography', 'photo', 'border', 'spacing', 'sections', 'header', 'introduction'] as const;
 export type FinishTarget = typeof finishTargets[number];
@@ -23,7 +24,7 @@ const domains: Record<FinishTarget, RegExp> = {
   header: /\b(blessing|invocation|mantra|title|header|name|text)\b|शिवाय|राधा|कृष्ण/i,
   introduction: /\b(introduction|about me|bio paragraph|intro|paragraph)\b/i,
 };
-const labels: Record<string, string> = { 'design.primary': 'Heading colour', 'design.accent': 'Accent colour', 'design.paper': 'Paper colour', 'design.text': 'Text colour', 'design.fontStyle': 'Font style', 'design.photoShape': 'Profile photo shape', 'design.layout': 'Layout', 'design.density': 'Spacing', 'design.blessingOverride': 'Devotional text', 'design.nameSize': 'Name size', frameStyle: 'Border shape', backgroundStyle: 'Background print', artwork: 'Devotional artwork', 'uploadedArtwork.placement': 'Uploaded image placement', 'uploadedArtwork.size': 'Uploaded image size', introduction: 'Introduction', fieldOrder: 'Field order' };
+const labels: Record<string, string> = { 'design.primary': 'Heading colour', 'design.accent': 'Accent colour', 'design.paper': 'Paper colour', 'design.text': 'Text colour', 'design.fontStyle': 'Font style', 'design.photoShape': 'Profile photo shape', 'design.layout': 'Layout', 'design.density': 'Spacing', 'design.blessingOverride': 'Devotional text', 'design.blessingOffsetX': 'Devotional text · horizontal position', 'design.blessingOffsetY': 'Devotional text · vertical position', 'design.nameSize': 'Name size', frameStyle: 'Border shape', backgroundStyle: 'Background print', artwork: 'Devotional artwork', 'uploadedArtwork.placement': 'Uploaded image placement', 'uploadedArtwork.size': 'Uploaded image size', introduction: 'Introduction', fieldOrder: 'Field order' };
 const enums: Record<string, readonly string[]> = {
   'design.fontStyle': ['classic', 'modern', 'traditional'], 'design.photoShape': ['circle', 'rounded', 'square'], 'design.layout': ['classic', 'portrait-top'], 'design.density': ['compact', 'balanced', 'airy'], 'design.nameSize': ['small', 'normal', 'large'],
   frameStyle: ['template', 'square', 'rounded', 'arch', 'oval', 'circle', 'double'], backgroundStyle: ['template', 'plain', 'parchment', 'dots', 'geometric', 'weave', 'radiant'], artwork: ['template', 'mahadev-radha-krishna', 'radha-krishna-replacement'],
@@ -37,7 +38,7 @@ const normalize = (text: string) => text.normalize('NFKC').replace(/\s+/g, ' ').
 const unquote = (text: string) => text.replace(/"[^"]*"|“[^”]*”|‘[^’]*’|'[^']*'/g, '');
 const clauses = (text: string) => unquote(text).split(/[.!?;\n]|\bbut\b|,\s*(?:and|while)\b|\band\s+(?=keep|preserve|retain|maintain|do not|don't|never)/i).map(t => t.trim()).filter(Boolean);
 const negative = (text: string) => /\b(do not|don't|never|no changes? to|without changing|unchanged|leave .{0,50}alone|keep|preserve|retain|maintain)\b/i.test(text);
-const positive = (text: string) => !negative(text) && (/\b(make|set|change|replace|rename|relabel|move|group|reorder|use|add|remove|hide|insert|include|reduce|increase|enlarge|shrink|rewrite|polish|improve|switch|restore|put|turn|give|want|need|should|prefer)\b/i.test(text)
+const positive = (text: string) => !negative(text) && (/\b(make|set|change|replace|rename|relabel|move|shift|nudge|lower|raise|group|reorder|use|add|remove|hide|insert|include|reduce|increase|enlarge|shrink|rewrite|polish|improve|switch|restore|put|turn|give|want|need|should|prefer)\b/i.test(text)
   || /\b(modern|traditional|classic|oval|circle|circular|square|rounded|arch|double|compact|airy|dotted)\s+(?:fonts?|border|frame|photo|spacing|background)\b|\b(?:font|border|frame|photo|spacing|background)\s*:\s*(?:modern|traditional|classic|oval|circle|square|rounded|arch|double|compact|airy|dotted)\b/i.test(text));
 
 function area(target: string): FinishTarget {
@@ -45,7 +46,7 @@ function area(target: string): FinishTarget {
   if (target === 'introduction') return 'introduction';
   if (target.startsWith('uploadedArtwork.') || target === 'artwork') return 'photo';
   if (target === 'frameStyle' || target === 'backgroundStyle') return 'border';
-  if (target === 'design.blessingOverride' || target === 'design.nameSize') return 'header';
+  if (target === 'design.blessingOverride' || target === 'design.nameSize' || target === 'design.blessingOffsetX' || target === 'design.blessingOffsetY') return 'header';
   if (target === 'design.photoShape') return 'photo';
   if (target === 'design.fontStyle') return 'typography';
   if (target === 'design.layout') return 'layout';
@@ -54,6 +55,11 @@ function area(target: string): FinishTarget {
 }
 
 function relevant(target: string, text: string) {
+  if (target === 'design.blessingOffsetX' || target === 'design.blessingOffsetY') {
+    if (/\blower[ -]?case\b/i.test(text) || /\b(font|size|wording|content)\b/i.test(text) && !/\b(move|shift|nudge|position|placement|horizontal|vertical)\b/i.test(text)) return false;
+    const d = blessingMoveDirections(text);
+    return target.endsWith('X') ? d.right || d.left || /\bhorizontal\b/i.test(text) || /\b(position|placement)\b/i.test(text) && !/\bvertical\b/i.test(text) : d.up || d.down || /\bvertical\b/i.test(text) || /\b(position|placement)\b/i.test(text) && !/\bhorizontal\b/i.test(text);
+  }
   if (target === 'field.label') return /\b(rename|relabel|replace|change)\b/i.test(text);
   if (target === 'field.section') return /\b(move|put|group|section)\b/i.test(text);
   if (target === 'field.group') return /\b(group|heading|section|move|put)\b/i.test(text);
@@ -76,6 +82,7 @@ function locked(target: string, instruction: string) {
   // General "everything else" constraints never grant or revoke a specific edit.
   return clauses(instruction).some(clause => {
     if (/\b(other|everything else|rest)\b/i.test(clause) || !negative(clause)) return false;
+    if (target === 'design.blessingOffsetX' || target === 'design.blessingOffsetY') return /\b(blessing|invocation|mantra|text|header)\b/i.test(clause) && relevant(target, clause);
     if (target === 'field.label') return /\b(labels?|names?|rename|relabel)\b/i.test(clause);
     if (target === 'field.section') return /\b(section|grouping|move)\b/i.test(clause);
     if (target === 'field.group') return /\b(group|heading|grouping)\b/i.test(clause);
@@ -100,18 +107,43 @@ function authorize(op: Operation, ctx: FinishContext) {
     return;
   }
   if (!op.evidence.trim() || !ctx.instruction.includes(op.evidence)) throw new FinishingPlanError('AI could not tie each edit to your instruction. Nothing was changed.');
+  if ((op.target === 'design.blessingOffsetX' || op.target === 'design.blessingOffsetY') && !referencesBlessing(op.evidence, ctx.design.blessingOverride ?? ctx.design.blessing)) throw new FinishingPlanError('Name the devotional text you want to move. Nothing was changed.');
   if (!clauses(op.evidence).some(clause => positive(clause) && relevant(op.target, clause))) throw new FinishingPlanError(`AI proposed an unrelated ${labels[op.target] || 'field'} change. Nothing was changed.`);
 }
 
 export function directFinishingPlan(ctx: FinishContext): unknown {
   const blessing = ctx.design.blessingOverride ?? ctx.design.blessing;
   const replacement = readBlessingEdit(ctx.instruction, blessing);
-  if (replacement === undefined) return undefined;
+  if (replacement === undefined) return directBlessingMove(ctx);
   const quotedReplacement = /\b(?:replace|change)\b[^.!?]*?(?:"[^"]*"|“[^”]*”|‘[^’]*’|'[^']*')\s+(?:with|to)\s+(?:"[^"]*"|“[^”]*”|‘[^’]*’|'[^']*')/i;
   const rest = ctx.instruction.replace(quotedReplacement, '');
   // The deterministic shortcut must not swallow a second request.
   if (clauses(rest).some(clause => positive(clause) && /\b(add|remove|hide|move|change|replace|make|use|set|rename|group|rewrite|increase|reduce)\b/i.test(clause))) return undefined;
+  if (/\b(?:and|also|but)\s+(?:change|move|shift|add|remove|replace|rename|rewrite|increase|reduce|make|use|set|enlarge|shrink)\b/i.test(rest)) return undefined;
   return { operations: [{ target: 'design.blessingOverride', value: replacement, evidence: ctx.instruction }], unfulfilled: [], direct: true };
+}
+
+function directBlessingMove(ctx: FinishContext): unknown {
+  const blessing = ctx.design.blessingOverride ?? ctx.design.blessing;
+  if (!blessing.trim()) return undefined;
+  const sentences = ctx.instruction.split(/[.!?;\n]/).map(s => s.trim()).filter(Boolean);
+  const sentence = sentences.find(s => referencesBlessing(s, blessing) && positive(unquotedPositionInstruction(s)) && /\b(move|shift|nudge|lower|raise)\b/i.test(unquotedPositionInstruction(s)));
+  if (!sentence) return undefined;
+  const unquoted = unquotedPositionInstruction(sentence);
+  // Quantified/compound requests go through the planner rather than guessing a distance or dropping a second edit.
+  if (/\d|\b(change|replace|add|remove|rename|rewrite|enlarge|shrink|increase|reduce|resize|font|size|wording|content)\b|\blower[ -]?case\b/i.test(unquoted)) return undefined;
+  const d = blessingMoveDirections(sentence);
+  if (d.right && d.left || d.up && d.down || !d.right && !d.left && !d.up && !d.down) return undefined;
+  for (const other of sentences.filter(s => s !== sentence)) {
+    if (/\b(?:and|also|but)\s+(?:change|move|shift|add|remove|replace|rename|rewrite|increase|reduce|make|use|set|enlarge|shrink)\b/i.test(unquotedPositionInstruction(other))) return undefined;
+    if (!positive(other)) continue;
+    if (/^(?:make sure|ensure)\b/i.test(other) && !/\b(change|replace|add|remove|rename|rewrite|move|increase|reduce|resize)\b/i.test(unquotedPositionInstruction(other))) continue;
+    return undefined;
+  }
+  const operations: Operation[] = [];
+  if (d.right || d.left) operations.push({ target: 'design.blessingOffsetX', value: (ctx.design.blessingOffsetX ?? 0) + (d.right ? 2 : -2), evidence: sentence });
+  if (d.down || d.up) operations.push({ target: 'design.blessingOffsetY', value: (ctx.design.blessingOffsetY ?? 0) + (d.down ? 3 : -3), evidence: sentence });
+  return { operations, unfulfilled: [] };
 }
 
 export function applyFinishingPlan(raw: unknown, ctx: FinishContext): FinishResult {
@@ -129,6 +161,7 @@ export function applyFinishingPlan(raw: unknown, ctx: FinishContext): FinishResu
     if (seen.has(key)) throw new FinishingPlanError('AI proposed conflicting edits to the same item. Nothing was changed.');
     seen.add(key);
     const isColor = colors.some(c => op.target === `design.${c}`);
+    const offsetAxis = op.target === 'design.blessingOffsetX' ? 'x' : op.target === 'design.blessingOffsetY' ? 'y' : undefined;
     if (!Object.hasOwn(labels, op.target) && !['field.label', 'field.section', 'field.group'].includes(op.target)) throw new FinishingPlanError('That edit is not supported in AI finishing. Nothing was changed. Use the field editor to change facts or the image upload to add your own artwork.');
     const expectedBlessing = readBlessingEdit(ctx.instruction, ctx.design.blessingOverride ?? ctx.design.blessing);
     if (op.target === 'design.blessingOverride' && expectedBlessing !== undefined) {
@@ -140,16 +173,21 @@ export function applyFinishingPlan(raw: unknown, ctx: FinishContext): FinishResu
     const literalColors = op.evidence.match(/#[\da-f]{6}\b/gi);
     if (isColor && literalColors?.length === 1 && typeof op.value === 'string' && op.value.toLowerCase() !== literalColors[0].toLowerCase()) throw new FinishingPlanError('AI did not use your exact requested colour. Nothing was changed.');
     if (enums[op.target] && (typeof op.value !== 'string' || !enums[op.target].includes(op.value))) throw new FinishingPlanError('AI requested a style this template cannot render. Nothing was changed.');
+    if (offsetAxis && !isBlessingOffset(op.value, offsetAxis)) throw new FinishingPlanError('That devotional text movement is outside the supported small adjustment range. Nothing was changed.');
+    if (offsetAxis && typeof op.value === 'number') {
+      const d = blessingMoveDirections(op.evidence), current = offsetAxis === 'x' ? ctx.design.blessingOffsetX ?? 0 : ctx.design.blessingOffsetY ?? 0;
+      if (offsetAxis === 'x' && (d.left && d.right || d.right && op.value <= current || d.left && op.value >= current) || offsetAxis === 'y' && (d.up && d.down || d.down && op.value <= current || d.up && op.value >= current)) throw new FinishingPlanError('The proposed movement does not follow your requested direction. Nothing was changed.');
+    }
     let before: unknown;
     let label = labels[op.target];
     if (op.target.startsWith('design.')) {
       const property = op.target.slice(7);
-      if (!isColor && !enums[op.target] && op.target !== 'design.blessingOverride') throw new FinishingPlanError('Unsupported design property.');
+      if (!isColor && !enums[op.target] && op.target !== 'design.blessingOverride' && !offsetAxis) throw new FinishingPlanError('Unsupported design property.');
       if (op.target === 'design.blessingOverride' && (typeof op.value !== 'string' || op.value.length > 120)) throw new FinishingPlanError('Keep devotional text under 120 characters.');
       if (op.target === 'design.layout' && illustrated) throw new FinishingPlanError('This illustrated template has a fixed layout. Use spacing and font changes, or choose another template. Nothing was changed.');
       if (op.target === 'design.paper' && illustrated) throw new FinishingPlanError('The paper colour is embedded in this illustrated background. Upload a revised background or choose an editable paper template. Nothing was changed.');
       if ((op.target === 'design.nameSize' || op.target === 'introduction') && ['pearl-jewel-luxe', 'emerald-gold-registry'].includes(ctx.template)) throw new FinishingPlanError('This form template displays the name as a field, without a separate name heading or introduction. Use the field editor or choose a template with a profile heading. Nothing was changed.');
-      before = property === 'blessingOverride' ? ctx.design.blessingOverride ?? ctx.design.blessing : ctx.design[property as keyof TemplateDesign];
+      before = property === 'blessingOverride' ? ctx.design.blessingOverride ?? ctx.design.blessing : offsetAxis ? ctx.design[property as keyof TemplateDesign] ?? 0 : ctx.design[property as keyof TemplateDesign];
       Object.assign(result.design, { [property]: op.value }); edited.add(property);
       if (isColor) Object.assign(result.visuals.colors, { [property]: op.value });
     } else if (op.target === 'artwork') {
@@ -185,11 +223,18 @@ export function applyFinishingPlan(raw: unknown, ctx: FinishContext): FinishResu
       if (!ctx.introduction || typeof op.value !== 'string' || !op.value.trim() || op.value.length > 1600) throw new FinishingPlanError('Add your introduction first. AI finishing can polish it without inventing facts.');
       before = ctx.introduction; result.introduction = op.value;
     }
-    if (JSON.stringify(before) !== JSON.stringify(op.value)) result.changes.push({ target: key, label, before: show(before), after: show(op.value) });
+    const showOffset = (value: unknown) => typeof value === 'number' ? value === 0 ? 'Original position' : `${Math.abs(value)}% ${offsetAxis === 'x' ? value > 0 ? 'right' : 'left' : value > 0 ? 'down' : 'up'}` : show(value);
+    if (JSON.stringify(before) !== JSON.stringify(op.value)) result.changes.push({ target: key, label, before: offsetAxis ? showOffset(before) : show(before), after: offsetAxis ? showOffset(op.value) : show(op.value) });
   }
   result.design.editedProperties = [...edited];
   // A valid subset must not silently stand in for a compound request.
   const operations = raw.operations as Operation[];
+  for (const sentence of ctx.instruction.split(/[.!?;\n]/)) {
+    const unquoted = unquotedPositionInstruction(sentence);
+    if (!referencesBlessing(sentence, ctx.design.blessingOverride ?? ctx.design.blessing) || !positive(unquoted) || !/\b(move|shift|nudge|lower|raise)\b/i.test(unquoted)) continue;
+    const d = blessingMoveDirections(sentence);
+    if ((d.right || d.left) && !operations.some(op => op.target === 'design.blessingOffsetX') || (d.up || d.down) && !operations.some(op => op.target === 'design.blessingOffsetY')) throw new FinishingPlanError('AI did not include every requested devotional text movement. Nothing was changed.');
+  }
   for (const clause of clauses(ctx.instruction)) {
     if (!positive(clause)) continue;
     const required: string[] = [];
@@ -213,6 +258,7 @@ design.fontStyle: classic|modern|traditional. design.photoShape: circle|rounded|
 design.layout: classic|portrait-top (only on ordinary non-illustrated templates; never arbitrary coordinates or new columns).
 design.density: compact|balanced|airy. design.nameSize: small|normal|large.
 design.blessingOverride: exact replacement devotional text, max120, empty to hide. A devotional name in quoted TEXT is never an image request.
+design.blessingOffsetX: finite number from -6 to 6; design.blessingOffsetY: finite number from -4 to 8. These move ONLY the existing blessing text, including on illustrated devotional templates. Values are absolute offsets from the template's original text anchor, in percent of paper content width (cqw). Defaults are 0. Positive X moves right; positive Y moves down. Use current offset plus requested delta for relative moves. For a slight right/down nudge use +2/+3 respectively. Never change text, font, colours, artwork, fields or whole layout to move a blessing. Evidence must explicitly identify the current blessing or say blessing/devotional text. Return only the requested axes; never move the wrong way. A fixed illustration layout does NOT prevent these supported text offsets. Ask for clarification when the target text/direction is ambiguous. Keep prior offsets during unrelated edits. Use 0 to restore the original text position when explicitly requested.
 frameStyle: template|square|rounded|arch|oval|circle|double. backgroundStyle: template|plain|parchment|dots|geometric|weave|radiant. These change border/print only; never switch templates. Illustrated devotional backgrounds cannot be recoloured, erased or repainted; their primary/text/accent colours affect editable text, not embedded artwork. Their border and layout are fixed. Report unsupported artwork/placement changes in unfulfilled.
 artwork: template|mahadev-radha-krishna|radha-krishna-replacement ONLY on mahadev-parvati-devotional. Add Radha Krishna opposite Mahadev uses mahadev-radha-krishna; replace Mahadev with Radha Krishna uses radha-krishna-replacement; restore original/remove Radha Krishna uses template. Never infer artwork from a blessing or preservation sentence.
 uploadedArtwork.placement: replace-header|above-details|below-details; uploadedArtwork.size: small|medium|large ONLY when uploadedArtwork exists. replace-header only for devotional templates. Cannot create, fetch or modify bitmap images; ask user to upload any other image.

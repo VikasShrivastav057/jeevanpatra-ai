@@ -11,6 +11,7 @@ import { isUploadedArtwork, type UploadedArtwork } from '../../lib/uploaded-artw
 import type { FinishResult } from '../../lib/finishing-plan';
 import { PhotoCropEditor } from '../../components/profile-photo';
 import { boundPhotoPlacement, defaultPhotoCrop, isPhotoAdjustment, resizePhoto, sameExceptPhotoAdjustment, type PhotoAdjustment, type PhotoCrop } from '../../lib/photo-adjustment';
+import { isBlessingOffset } from '../../lib/blessing-position';
 import { BiodataPaper, type BackgroundStyle, type FieldSection, type FrameStyle, type ProfileField, type TemplateColors, type TemplateDesign } from '../../components/biodata-paper';
 
 type AiTone = 'warm' | 'concise' | 'traditional';
@@ -71,7 +72,7 @@ const finishChangeOptions: { id: FinishChangeTarget; label: string; note: string
   { id: 'border', label: 'Border & print', note: 'Frame and background' },
   { id: 'spacing', label: 'Spacing', note: 'Balance and readability' },
   { id: 'sections', label: 'Sections', note: 'Order and grouping' },
-  { id: 'header', label: 'Header', note: 'Name and blessing style' },
+  { id: 'header', label: 'Header', note: 'Name, blessing text and position' },
   { id: 'introduction', label: 'Introduction', note: 'Polish your own paragraph' },
 ];
 const finishImprovementOptions: { id: FinishImprovementMode; label: string; note: string }[] = [
@@ -93,6 +94,8 @@ function isTemplateDesign(value: unknown): value is TemplateDesign {
     && ['circle', 'rounded', 'square'].includes(item.photoShape || '')
     && ['classic', 'portrait-top'].includes(item.layout || '')
     && ['classic', 'modern', 'traditional'].includes(item.fontStyle || '')
+    && (item.blessingOffsetX === undefined || isBlessingOffset(item.blessingOffsetX, 'x'))
+    && (item.blessingOffsetY === undefined || isBlessingOffset(item.blessingOffsetY, 'y'))
     && (item.density === undefined || ['compact', 'balanced', 'airy'].includes(item.density));
 }
 

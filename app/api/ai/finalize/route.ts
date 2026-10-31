@@ -4,6 +4,7 @@ import { getGroqTextModels } from '../../../../lib/groq-models';
 import { getTemplateById, type TemplateId } from '../../../../lib/template-catalog';
 import { applyFinishingPlan, directFinishingPlan, finishTargets, finishingPlannerInstruction, FinishingPlanError, isRecord, userInstruction, type FieldSummary, type FinishContext, type FinishVisuals, type FinishTarget } from '../../../../lib/finishing-plan';
 import type { TemplateDesign } from '../../../../components/biodata-paper';
+import { isBlessingOffset } from '../../../../lib/blessing-position';
 
 const sections = ['personal', 'family', 'contact', 'preferences'];
 const hex = /^#[\da-f]{6}$/i;
@@ -20,8 +21,9 @@ function currentDesign(value: unknown, template: string): TemplateDesign | undef
   if (!isRecord(value) || !['name', 'note', 'blessing'].every(key => typeof value[key] === 'string') || !['primary', 'accent', 'text'].every(key => typeof value[key] === 'string' && hex.test(value[key] as string)) || typeof value.paper !== 'string' || !hex.test(value.paper) && value.paper !== base?.theme.paper) return undefined;
   if (!['classic', 'floral', 'arch', 'minimal', 'rounded', 'oval', 'circle', 'double'].includes(String(value.borderStyle)) || !['circle', 'rounded', 'square'].includes(String(value.photoShape)) || !['classic', 'portrait-top'].includes(String(value.layout)) || !['classic', 'modern', 'traditional'].includes(String(value.fontStyle))) return undefined;
   if (value.blessingOverride !== undefined && (typeof value.blessingOverride !== 'string' || value.blessingOverride.length > 120) || value.editedProperties !== undefined && (!Array.isArray(value.editedProperties) || value.editedProperties.some(v => typeof v !== 'string'))) return undefined;
+  if (value.blessingOffsetX !== undefined && !isBlessingOffset(value.blessingOffsetX, 'x') || value.blessingOffsetY !== undefined && !isBlessingOffset(value.blessingOffsetY, 'y')) return undefined;
   if (value.density !== undefined && (typeof value.density !== 'string' || !['compact', 'balanced', 'airy'].includes(value.density)) || value.nameSize !== undefined && (typeof value.nameSize !== 'string' || !['small', 'normal', 'large'].includes(value.nameSize)) || value.artwork !== undefined && (typeof value.artwork !== 'string' || !['template', 'mahadev-radha-krishna', 'radha-krishna-replacement'].includes(value.artwork))) return undefined;
-  const keys = ['name', 'note', 'primary', 'accent', 'paper', 'text', 'borderStyle', 'photoShape', 'layout', 'fontStyle', 'density', 'blessing', 'blessingOverride', 'artwork', 'nameSize', 'editedProperties'];
+  const keys = ['name', 'note', 'primary', 'accent', 'paper', 'text', 'borderStyle', 'photoShape', 'layout', 'fontStyle', 'density', 'blessing', 'blessingOverride', 'blessingOffsetX', 'blessingOffsetY', 'artwork', 'nameSize', 'editedProperties'];
   const design = Object.fromEntries(keys.filter(key => value[key] !== undefined).map(key => [key, value[key]])) as TemplateDesign;
   if (base && design.blessingOverride === undefined) design.blessing = base.blessing;
   return design;
