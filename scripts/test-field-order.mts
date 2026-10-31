@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import { readFieldOrderRequest, FieldOrderError } from '../lib/field-order.ts';
+const fields = [{ id: 'name', label: 'Full Name', section: 'personal' }, { id: 'job', label: 'Profession', section: 'personal' }, { id: 'dob', label: 'Date of birth', section: 'personal' }, { id: 'edu', label: 'Education', section: 'personal' }, { id: 'height', label: 'Height', section: 'personal' }, { id: 'father', label: 'Father', section: 'family' }, { id: 'mother', label: 'Mother', section: 'family' }, { id: 'phone', label: 'Phone', section: 'contact' }, { id: 'email', label: 'Email', section: 'contact' }, { id: 'address', label: 'Address', section: 'contact', group: 'Residential Address' }, { id: 'zip', label: 'Zip code', section: 'contact', group: 'Residential Address' }];
+const ids = fields.map(f => f.id), tail = ids.slice(5); let count = 0;
+function check(text: string, order: string[]) { const before = structuredClone(fields); assert.deepEqual(readFieldOrderRequest(text, fields)?.order, order, text); assert.deepEqual(fields, before); count++; }
+check('Move Education above Profession. Keep everything else unchanged.', ['name', 'edu', 'job', 'dob', 'height', ...tail]);
+check('Place Profession after Education.', ['name', 'dob', 'edu', 'job', 'height', ...tail]);
+check('Education before Profession.', ['name', 'edu', 'job', 'dob', 'height', ...tail]);
+check('Swap Height and Date of birth.', ['name', 'job', 'height', 'edu', 'dob', ...tail]);
+check('Move Education first in Personal details.', ['edu', 'name', 'job', 'dob', 'height', ...tail]);
+check('Put Full Name at the top.', ids);
+check('Move Education last in Personal details.', ['name', 'job', 'dob', 'height', 'edu', ...tail]);
+check('Move Height to the bottom.', ids);
+check('Reorder personal fields as Full Name, DOB, Height, Education, Profession.', ['name', 'dob', 'height', 'edu', 'job', ...tail]);
+check('Field order: Education, Profession, Full Name, Height, Date of birth.', ['edu', 'job', 'name', 'height', 'dob', ...tail]);
+check('Sort personal fields alphabetically.', ['dob', 'edu', 'name', 'height', 'job', ...tail]);
+check('Move Email above Phone.', [...ids.slice(0, 7), 'email', 'phone', ...ids.slice(9)]);
+check('Move Zip code before Address within Residential Address.', [...ids.slice(0, 9), 'zip', 'address']);
+check('Reorder Residential Address as Zip code, Address.', [...ids.slice(0, 9), 'zip', 'address']);
+check('Move Education above Profession. Move Email before Phone.', ['name', 'edu', 'job', 'dob', 'height', 'father', 'mother', 'email', 'phone', 'address', 'zip']);
+for (const text of ['Do not reorder fields.', 'Keep the field order unchanged.', 'Change the heading colour to blue.', 'Move Education above Profession and use a modern font.', 'Move Education above Profession. Use a modern font.', 'Move Education above Profession and below Height.']) { assert.equal(readFieldOrderRequest(text, fields), undefined, text); count++; }
+assert.throws(() => readFieldOrderRequest('Move Phone before Father.', fields), FieldOrderError); count++;
+const duplicates = [...fields, { id: 'partner-edu', label: 'Education', section: 'preferences' }, { id: 'partner-job', label: 'Profession', section: 'preferences' }];
+assert.throws(() => readFieldOrderRequest('Move Education before Profession.', duplicates), FieldOrderError); count++;
+assert.deepEqual(readFieldOrderRequest('Move Education before Profession within personal details.', duplicates)?.order, ['name', 'edu', 'job', 'dob', 'height', ...tail, 'partner-edu', 'partner-job']); count++;
+const interleaved = [{ id: 'a1', label: 'First A', section: 'personal', group: 'A' }, { id: 'b1', label: 'First B', section: 'personal', group: 'B' }, { id: 'a2', label: 'Second A', section: 'personal', group: 'A' }];
+assert.deepEqual(readFieldOrderRequest('Move Second A before First A.', interleaved)?.order, ['a2', 'b1', 'a1']); count++;
+console.log(`${count} field relation, swap, list, alphabetical, section scope, ambiguity and preservation checks passed.`);

@@ -94,6 +94,23 @@ rejected('Use a modern font.', [op('design.fontStyle', 'modern', 'Use a modern f
 rejected('Use a modern font.', [op('template', 'peacock', 'Use a modern font')]);
 rejected('Use a modern font.', [op('__proto__', 'bad', 'Use a modern font')]);
 rejected('Reorder all fields.', [op('fieldOrder', ['phone'], 'Reorder all fields')]);
+const reorderPrompt = 'Move Education above Phone. Keep all values, labels, sections and the entire design unchanged.';
+const reorderContext = { ...baseline, instruction: reorderPrompt };
+const reordered = applyFinishingPlan(directFinishingPlan(reorderContext), reorderContext); count++;
+assert.deepEqual(reordered.fieldOrder, ['education', 'phone', 'address', 'email']); assert.deepEqual(reordered.fieldUpdates, []); assert.equal(reordered.changes.length, 1); assert.equal(reordered.changes[0].label, 'Field order'); assert.deepEqual(reordered.design, baseline.design); assert.deepEqual(reordered.visuals, baseline.visuals); assert.equal(reordered.introduction, baseline.introduction);
+const customNames = { ...baseline, fields: [{ id: 'h', label: 'Height', section: 'personal' as const, hasValue: true }, { id: 'age', label: 'Age Range', section: 'personal' as const, hasValue: true }] };
+assert.deepEqual(applyFinishingPlan(directFinishingPlan({ ...customNames, instruction: 'Swap Height and Age Range.' }), { ...customNames, instruction: 'Swap Height and Age Range.' }).fieldOrder, ['age', 'h']); count++;
+rejected('Use a modern font.', [op('fieldOrder', ['education', 'phone', 'address', 'email'], 'Use a modern font')]);
+rejected('Move Education above Phone.', [op('fieldOrder', ['phone', 'education', 'address', 'email'], 'Move Education above Phone')]);
+rejected('Move Education above Phone.', [op('field.section', 'contact', 'Move Education above Phone', 'education')]);
+rejected('Move Education above Phone. Use a modern font.', [op('design.fontStyle', 'modern', 'Use a modern font')]);
+rejected('Reorder all fields.', [op('fieldOrder', ['phone', 'email', 'address', 'education', 'invented'], 'Reorder all fields')]);
+rejected('Reorder all fields.', [op('fieldOrder', ['phone', 'email', 'address', 'phone'], 'Reorder all fields')]);
+assert.equal(directFinishingPlan({ ...baseline, instruction: exact + ' Reorder all fields alphabetically.' }), undefined); count++;
+const scopedAlphabetical = 'Sort personal fields alphabetically and use a modern font.';
+const scopedOrderFields = [{ id: 'z', label: 'Z personal', section: 'personal' as const, hasValue: true }, { id: 'a', label: 'A personal', section: 'personal' as const, hasValue: true }, { id: 'fz', label: 'Z family', section: 'family' as const, hasValue: true }, { id: 'fa', label: 'A family', section: 'family' as const, hasValue: true }];
+assert.deepEqual(run(scopedAlphabetical, [op('fieldOrder', ['a', 'z', 'fz', 'fa'], scopedAlphabetical), op('design.fontStyle', 'modern', scopedAlphabetical)], { fields: scopedOrderFields }).fieldOrder, ['a', 'z', 'fz', 'fa']);
+rejected(scopedAlphabetical, [op('fieldOrder', ['a', 'z', 'fa', 'fz'], scopedAlphabetical), op('design.fontStyle', 'modern', scopedAlphabetical)], { fields: scopedOrderFields });
 assert.equal(run('Do not change anything.', []).changes.length, 0);
 const gradient = 'linear-gradient(145deg,#fffdf7,#fff5e7)';
 const gradientResult = run(heading, [op('design.primary', '#84252b', 'Change only the heading colour to #84252b')], { template: 'classic-red', design: { ...baseline.design, paper: gradient }, visuals: { ...baseline.visuals, colors: { ...baseline.visuals.colors, paper: gradient } } });
@@ -101,4 +118,3 @@ assert.equal(gradientResult.design.paper, gradient); assert.equal(gradientResult
 for (const template of ['mahadev-parvati-devotional', 'pearl-jewel-luxe', 'emerald-gold-registry']) rejected('Change the paper colour to white.', [op('design.paper', '#ffffff', 'Change the paper colour to white')], { template });
 assert.throws(() => applyFinishingPlan({ operations: [op('design.fontStyle', 'modern', 'Use a modern font')], unfulfilled: ['Upload a new image to replace the deity.'] }, { ...baseline, instruction: 'Use a modern font and create a new deity image.' }), FinishingPlanError); count++;
 console.log(`${count} finishing isolation, preservation, invalid-plan, multi-request and image checks passed.`);
-

@@ -60,11 +60,13 @@ export async function POST(request: Request) {
   if (body.changeTargets !== undefined && (!Array.isArray(body.changeTargets) || body.changeTargets.some(t => !finishTargets.includes(t as FinishTarget)))) return fail('Choose valid change areas.');
   if (body.improvementMode !== undefined && (typeof body.improvementMode !== 'string' || !['requested-only', 'balanced', 'best-version'].includes(body.improvementMode))) return fail('Choose a valid improvement approach.');
   const ctx: FinishContext = { instruction: userInstruction(body.recommendation), introduction: body.introduction, fields, design, visuals, template, targets: body.changeTargets as FinishTarget[] || [], mode: body.improvementMode as FinishContext['mode'] || 'requested-only' };
-  const direct = directFinishingPlan(ctx);
-  if (direct) {
-    try { return Response.json({ ...applyFinishingPlan(direct, ctx), model: 'header-text-edit' }); }
-    catch (error) { return fail(error instanceof Error ? error.message : 'The requested edit could not be applied.', 422); }
-  }
+  try {
+    const direct = directFinishingPlan(ctx);
+    if (direct) {
+      const orderEdit = isRecord(direct) && Array.isArray(direct.operations) && direct.operations.some(op => isRecord(op) && op.target === 'fieldOrder');
+      return Response.json({ ...applyFinishingPlan(direct, ctx), model: orderEdit ? 'field-order-edit' : 'header-text-edit' });
+    }
+  } catch (error) { return fail(error instanceof Error ? error.message : 'The requested edit could not be applied.', 422); }
   const apiKey = runtimeEnv.GROQ_API_KEY;
   if (!apiKey) return fail('Groq is not connected yet.', 503);
   let lastError = 'AI could not prepare a verified edit plan. Nothing was changed. Please try again.';
@@ -95,4 +97,3 @@ export async function POST(request: Request) {
   }
   return fail(lastError, lastError.startsWith('AI is busy') ? 503 : 422);
 }
-

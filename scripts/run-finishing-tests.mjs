@@ -10,7 +10,10 @@ async function compile(path, dependencies = {}) {
 const blessing = await compile('../lib/blessing-edit.ts');
 const artwork = await compile('../lib/devotional-artwork.ts');
 const position = await compile('../lib/blessing-position.ts');
-const plan = await compile('../lib/finishing-plan.ts', { './blessing-edit': blessing, './devotional-artwork': artwork, './blessing-position': position });
-try { await import(await compile('./test-finishing-plan.mts', { '../lib/finishing-plan': plan })); }
+const order = await compile('../lib/field-order.ts');
+const plan = await compile('../lib/finishing-plan.ts', { './blessing-edit': blessing, './devotional-artwork': artwork, './blessing-position': position, './field-order': order });
+try {
+  await import(await compile('./test-field-order.mts', { '../lib/field-order.ts': order }));
+  await import(await compile('./test-finishing-plan.mts', { '../lib/finishing-plan': plan }));
+}
 catch (error) { console.error(String(error.stack || error).replace(/data:text\/javascript;base64,[a-zA-Z0-9+/=]+/g, 'test-module')); process.exitCode = 1; }
-
