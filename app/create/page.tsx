@@ -301,7 +301,6 @@ export default function Home() {
         }
       } else if (requested) {
         restoredCustomDesign = undefined;
-        restoredFinishDesign = undefined;
       }
 
       if (cancelled) return;
