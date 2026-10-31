@@ -1,5 +1,6 @@
 import { getAppSession, logActivity } from '../../../../lib/app-auth';
 import { runtimeEnv } from '../../../../lib/runtime-env';
+import { getGroqTextModels } from '../../../../lib/groq-models';
 
 type FieldSection = 'personal' | 'family' | 'contact' | 'preferences';
 type SuggestedField = { label: string; value: string; section: FieldSection };
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
 
   const apiKey = runtimeEnv.GROQ_API_KEY;
   if (!apiKey) return Response.json({ error: 'Groq is not connected yet.' }, { status: 503 });
-  const models = [...new Set([runtimeEnv.GROQ_MODEL, 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'].filter(Boolean))] as string[];
+  const models = getGroqTextModels(runtimeEnv.GROQ_MODEL);
   let lastError = 'Groq could not create the fields.';
 
   for (const model of models) {
@@ -109,3 +110,4 @@ export async function POST(request: Request) {
 
   return Response.json({ error: lastError }, { status: 502 });
 }
+

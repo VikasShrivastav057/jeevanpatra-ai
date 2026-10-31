@@ -165,6 +165,7 @@
 .bio-paper.template-themed.radha-krishna-devotional{background:#fff9e8 url('/templates/radha-krishna-devotional-frame.png') center/100% 100% no-repeat}
 .bio-paper.template-themed.mahadev-parvati-devotional{background:#fffaf0 url('/templates/mahadev-parvati-devotional-frame.png') center/100% 100% no-repeat}
 .bio-paper.template-themed.mahadev-parvati-devotional.artwork-mahadev-radha-krishna{background-image:url('/templates/mahadev-radha-krishna-frame.jpg')!important}
+.bio-paper.template-themed.mahadev-parvati-devotional.artwork-radha-krishna-replacement{background-image:url('/templates/radha-krishna-mountain-frame.jpg')!important}
 .bio-paper.template-themed.mahadev-parvati-devotional.artwork-mahadev-radha-krishna .bio-blessing{top:39.1%;left:7%;width:44%;font-size:clamp(8px,1.7cqw,14px)}
 .bio-paper.template-themed.mahadev-parvati-devotional.artwork-mahadev-radha-krishna .bio-header p{top:41.5%;left:8%;width:84%;font-size:clamp(6px,1.2cqw,10px);line-height:1.25}
 .bio-paper.template-themed.mahadev-parvati-devotional.artwork-mahadev-radha-krishna .bio-sections{top:45.5%}

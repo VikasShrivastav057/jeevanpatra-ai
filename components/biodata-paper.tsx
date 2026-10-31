@@ -26,7 +26,8 @@ export function BiodataPaper({ template, photo, name, about, fields, design, fra
     : isAiTemplate
       ? ({ ...activeVariables, '--design-primary': activeColors.primary, '--design-accent': activeColors.accent, '--design-paper': activeColors.paper, '--design-text': activeColors.text } as CSSProperties)
       : (activeVariables as CSSProperties);
-  const designClasses = design ? `design-${design.borderStyle} photo-${design.photoShape} layout-${design.layout} font-${design.fontStyle} density-${design.density || 'balanced'} ${template === 'mahadev-parvati-devotional' && design.artwork === 'mahadev-radha-krishna' ? 'artwork-mahadev-radha-krishna' : ''}` : '';
+  const artworkClass = template === 'mahadev-parvati-devotional' && (design?.artwork === 'mahadev-radha-krishna' || design?.artwork === 'radha-krishna-replacement') ? `artwork-${design.artwork}` : '';
+  const designClasses = design ? `design-${design.borderStyle} photo-${design.photoShape} layout-${design.layout} font-${design.fontStyle} density-${design.density || 'balanced'} ${artworkClass}` : '';
   const frameClass = frameStyle === 'template' ? '' : `frame-${frameStyle}`;
   const backgroundClass = backgroundStyle === 'template' ? '' : `background-${backgroundStyle}`;
   const classes = `bio-paper ${template} ${baseTemplate ? 'template-themed' : ''} ${isAiTemplate ? 'ai-custom' : ''} ${isAiFinished ? 'ai-finished' : ''} ${designClasses} ${frameClass} ${backgroundClass} ${compact ? 'compact' : ''}`;

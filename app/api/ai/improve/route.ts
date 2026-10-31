@@ -1,5 +1,6 @@
 import { getAppSession } from '../../../../lib/app-auth';
 import { runtimeEnv } from '../../../../lib/runtime-env';
+import { getGroqTextModels } from '../../../../lib/groq-models';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
   const apiKey = runtimeEnv.GROQ_API_KEY;
   if (!apiKey) return Response.json({ error: 'Groq is not connected yet. Add the Groq API key to activate AI writing.' }, { status: 503 });
   const configuredModel = runtimeEnv.GROQ_MODEL;
-  const models = [...new Set([configuredModel, 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'].filter(Boolean))] as string[];
+  const models = getGroqTextModels(configuredModel);
   let lastError = 'Groq could not complete the rewrite.';
 
   for (const model of models) {

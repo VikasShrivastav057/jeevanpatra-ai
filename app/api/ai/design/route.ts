@@ -1,5 +1,6 @@
 import { getAppSession } from '../../../../lib/app-auth';
 import { runtimeEnv } from '../../../../lib/runtime-env';
+import { getGroqTextModels } from '../../../../lib/groq-models';
 
 type Design = {
   name: string; note: string; primary: string; accent: string; paper: string; text: string;
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
   if (!apiKey) return Response.json({ error: 'Groq is not connected yet.' }, { status: 503 });
   const models = referenceImage
     ? [...new Set([runtimeEnv.GROQ_VISION_MODEL, 'qwen/qwen3.8-27b'].filter(Boolean))] as string[]
-    : [...new Set([runtimeEnv.GROQ_MODEL, 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'].filter(Boolean))] as string[];
+    : getGroqTextModels(runtimeEnv.GROQ_MODEL);
   const systemPrompt = 'You design elegant Indian marriage biodata templates. Return only JSON with: name, note, primary, accent, paper, text, borderStyle, photoShape, layout, fontStyle, blessing. Colors must be #RRGGBB. borderStyle must be classic, floral, arch, minimal, rounded, oval, circle, or double, and must follow any border shape explicitly requested by the user or clearly visible in a reference image. photoShape must be circle, rounded, or square. layout must be classic or portrait-top. fontStyle must be classic, modern, or traditional. When a reference image is supplied, closely match its dominant colors, border geometry, ornament density, spacing, typography mood, and portrait placement within this schema. Never copy names, phone numbers, addresses, faces, logos, watermarks, or other personal content from the image. Keep colors readable and tasteful. Use a culturally appropriate blessing only when the user explicitly names a faith or tradition; otherwise use an empty string. Do not add any other keys.';
   const userPrompt = idea || 'Create an editable biodata template that closely follows the uploaded reference image.';
   const userContent = referenceImage ? [

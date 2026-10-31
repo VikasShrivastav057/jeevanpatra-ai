@@ -1,5 +1,8 @@
 import { getAppSession } from '../../../../lib/app-auth';
 import { runtimeEnv } from '../../../../lib/runtime-env';
+import { getGroqTextModels } from '../../../../lib/groq-models';
+import { requestsFieldEdits } from '../../../../lib/finishing-intent';
+import { getTemplateById, type TemplateId } from '../../../../lib/template-catalog';
 import { resolveDevotionalArtwork, type DevotionalArtwork } from '../../../../lib/devotional-artwork';
 
 type FieldSection = 'personal' | 'family' | 'contact' | 'preferences';
@@ -65,7 +68,7 @@ function cleanDesign(value: unknown): Design {
   const item = isRecord(value) ? value : {};
   const paper = typeof item.paper === 'string' && hex.test(item.paper) ? item.paper.toLowerCase() : fallback.paper;
   return {
-    artwork: item.artwork === 'mahadev-radha-krishna' ? item.artwork : 'template',
+    artwork: item.artwork === 'mahadev-radha-krishna' || item.artwork === 'radha-krishna-replacement' ? item.artwork : 'template',
     name: typeof item.name === 'string' && item.name.trim() ? item.name.trim().slice(0, 30) : fallback.name,
     note: typeof item.note === 'string' && item.note.trim() ? item.note.trim().slice(0, 55) : fallback.note,
     primary: safeColor(item.primary, paper, 3, fallback.primary),
@@ -161,6 +164,15 @@ export async function POST(request: Request) {
 
   const cleanOriginalIntroduction = introduction.trim();
   const artwork = resolveDevotionalArtwork(recommendation, currentTemplate, isRecord(body.currentDesign) ? body.currentDesign.artwork : undefined);
+  const artworkOnly = currentTemplate.includes('mahadev-parvati-devotional') && /\bradha[\s-]*krishna\b/i.test(recommendation)
+    && /\b(only\s+(?:replace|add|remove|change)|do not change any other|keep everything else)\b/i.test(recommendation) && !requestsFieldEdits(recommendation);
+  if (artworkOnly) {
+    const base = getTemplateById(currentTemplate.split(':')[0].trim() as TemplateId);
+    const design = isRecord(body.currentDesign) ? cleanDesign(body.currentDesign) : {
+      ...fallback, ...base?.theme, name: base?.name || fallback.name, blessing: base?.blessing || '',
+    };
+    return Response.json({ introduction: cleanOriginalIntroduction, fieldOrder: sanitizedFields.map(field => field.id), fieldUpdates: [], design: { ...design, artwork }, model: 'artwork-selection' });
+  }
   if (runtimeEnv.AI_TEST_MODE === 'true') {
     return Response.json({
       introduction: cleanOriginalIntroduction,
@@ -172,7 +184,7 @@ export async function POST(request: Request) {
   const apiKey = runtimeEnv.GROQ_API_KEY;
   if (!apiKey) return Response.json({ error: 'Groq is not connected yet.' }, { status: 503 });
   const configuredModel = runtimeEnv.GROQ_MODEL;
-  const models = [...new Set([configuredModel, 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'].filter(Boolean))] as string[];
+  const models = getGroqTextModels(configuredModel);
   let lastError = 'Groq could not finish the biodata.';
   const prompt = {
     introduction: cleanOriginalIntroduction,
@@ -227,7 +239,7 @@ export async function POST(request: Request) {
         const generated = JSON.parse(content) as unknown;
         const item = isRecord(generated) ? generated : {};
         const fieldUpdates = cleanFieldUpdates(item.fieldUpdates, sanitizedFields);
-        if (/\b(move|rename|replace|group|heading)\b/i.test(recommendation) && /\b(fields?|phone|email|address|zip|sections?|labels?|details)\b/i.test(recommendation) && fieldUpdates.length === 0) {
+        if (requestsFieldEdits(recommendation) && fieldUpdates.length === 0) {
           lastError = 'AI did not apply the requested field changes. Please retry with the field names and target section.';
           continue;
         }
