@@ -45,8 +45,17 @@ const bridge = data('const t=globalThis.__artworkTest; export const get=(...a)=>
 const auth = data('const t=globalThis.__artworkTest;export const getAppSession=async()=>t.session;export const getStudioOwnerId=s=>s.userId;export const logActivity=async()=>{};');
 const db = data('export const database={prepare:()=>({bind:()=>({first:async()=>({count:globalThis.__artworkTest.quota()})})})};');
 const env = data('export const runtimeEnv={OPENAI_API_KEY:"test-key-not-real",PUBLIC_SITE_URL:"https://public.example.test"};');
-const routeUrl = await compile('app/api/ai/artwork/route.ts', { '@vercel/blob': bridge, pngjs: pathToFileURL(require.resolve('pngjs')).href, '../../../../lib/app-auth': auth, '../../../../lib/database': db, '../../../../lib/runtime-env': env, '../../../../lib/artwork-generation': generation, '../../../../lib/artwork-pixels': pixels });
+const templateSource = await compile('lib/artwork-template-source.ts', { './runtime-env': env });
+const routeUrl = await compile('app/api/ai/artwork/route.ts', { '@vercel/blob': bridge, pngjs: pathToFileURL(require.resolve('pngjs')).href, '../../../../lib/app-auth': auth, '../../../../lib/database': db, '../../../../lib/runtime-env': env, '../../../../lib/artwork-generation': generation, '../../../../lib/artwork-pixels': pixels, '../../../../lib/artwork-template-source': templateSource });
 const { POST } = await import(routeUrl);
+const { readTemplateArtwork } = await import(templateSource);
+const previousNodeEnv = process.env.NODE_ENV;
+try {
+  process.env.NODE_ENV = 'production';
+  const file = await readTemplateArtwork('/templates/mahadev-parvati-devotional-frame.png', 'https://protected.example.test');
+  check(Buffer.from(file).equals(await readFile(new URL('../dist/client/templates/mahadev-parvati-devotional-frame.png', import.meta.url))), 'production reads the deployed bitmap without a gateway request');
+  await assert.rejects(() => readTemplateArtwork('/templates/../../.env.local', 'https://protected.example.test')); count++;
+} finally { if (previousNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousNodeEnv; }
 const nativeFetch = globalThis.fetch;
 globalThis.fetch = async (url, init) => {
   if (String(url).includes('/templates/')) { templateUrl = String(url); return new Response(PNG.sync.write(original)); }

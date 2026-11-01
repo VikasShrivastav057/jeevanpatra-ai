@@ -12,7 +12,8 @@ The editor currently supports templates with raster backgrounds: the three devot
 
 - `OPENAI_API_KEY`: server-only image API key, stored as a Vercel Production Secret. Requires API billing credit and image-model access.
 - `OPENAI_IMAGE_MODEL`: optional; defaults to `gpt-image-2.5-sunburst`.
-- `PUBLIC_SITE_URL`: public canonical site origin on Vercel (currently `https://jeevanpatra-ai.vercel.app`). This prevents loading public template assets through a protected forwarded deployment hostname. Falls back to `VERCEL_PROJECT_PRODUCTION_URL`, then the request origin for local development.
+- Production reads clean template backgrounds directly from `dist/client/templates` in the Vercel container. It never sends a web request back through its own deployment gateway.
+- `PUBLIC_SITE_URL`: optional origin for the HTTP asset loader in development. Falls back to `VERCEL_PROJECT_PRODUCTION_URL`, then the request origin. Production uses the deployed files instead.
 - Existing account database and private Blob storage must be configured.
 
 Requests create one medium-quality 1024×1536 image, with no automatic paid retries. Up to five attempts per account per hour are allowed. Identical retries with the same request ID reuse a previously stored result. An in-flight lock prevents duplicate requests within a server instance. The database-backed hourly count also applies across instances; strict concurrent cross-instance reservation is not implemented.
@@ -21,7 +22,7 @@ The server validates template/variant, image ownership, edit bounds, generated-i
 
 ## Verification
 
-- `node scripts/test-artwork-generation.mjs`: actual handler with external boundaries replaced; routing, privacy, owner isolation, reference consent, retry reuse, billing errors and exact outside-area pixels.
+- Run `npm run build`, then `node scripts/test-artwork-generation.mjs`: actual handler with external boundaries replaced; routing, privacy, owner isolation, reference consent, retry reuse, billing errors, deployed-file loading and exact outside-area pixels.
 - `node scripts/run-finishing-tests.mjs`: existing text, layout, field order and portrait editing regressions.
 - Browser verification covers customer desktop and admin mobile, review before applying, save failure/retry, reload, reference opt-in, restore and the real PDF export flow.
 

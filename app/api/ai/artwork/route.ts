@@ -5,6 +5,7 @@ import { database } from '../../../../lib/database';
 import { runtimeEnv } from '../../../../lib/runtime-env';
 import { artworkSource, isArtworkArea, isArtworkFile, isArtworkReplacement, matchesArtwork } from '../../../../lib/artwork-generation';
 import { artworkMask, compositeArtwork, decodeArtwork } from '../../../../lib/artwork-pixels';
+import { readTemplateArtwork } from '../../../../lib/artwork-template-source';
 
 const pending = new Set<string>();
 const fail = (error: string, status = 400) => Response.json({ error }, { status, headers: { 'cache-control': 'no-store' } });
@@ -49,13 +50,7 @@ export async function POST(request: Request) {
     const quota = await database.prepare("SELECT COUNT(*) AS count FROM activity_logs WHERE user_id = ? AND action = 'artwork_generation_requested' AND created_at > ?").bind(owner, Date.now() - 3_600_000).first<{ count: number }>();
     if (Number(quota?.count) >= 5) return fail('You have used five artwork generations this hour. Try again later or upload an image.', 429);
     stage = 'template-read';
-    const original = isArtworkReplacement(current) ? (await ownedImage(owner, current.src)).bytes : new Uint8Array(await (async () => {
-      // A service's forwarded hostname may be a protected deployment URL, even on the public domain.
-      const origin = runtimeEnv.PUBLIC_SITE_URL || (runtimeEnv.VERCEL_PROJECT_PRODUCTION_URL ? `https://${runtimeEnv.VERCEL_PROJECT_PRODUCTION_URL}` : request.url);
-      const response = await fetch(new URL(source, origin), { signal: AbortSignal.timeout(15_000), redirect: 'error' });
-      if (!response.ok) throw new Error('The template artwork could not be opened.');
-      return response.arrayBuffer();
-    })());
+    const original = isArtworkReplacement(current) ? (await ownedImage(owner, current.src)).bytes : await readTemplateArtwork(source, request.url);
     stage = 'template-decode';
     const decoded = decodeArtwork(original);
     const images = [{ image_url: `data:image/png;base64,${PNG.sync.write(decoded).toString('base64')}` }];
