@@ -6,7 +6,7 @@ export function isArtworkFile(value: unknown): value is string {
 }
 export function artworkSource(template: string, variant = 'template'): string | undefined {
   if (template === 'mahadev-parvati-devotional') return variant === 'mahadev-radha-krishna'
-    ? '/templates/mahadev-radha-krishna-frame.png' : variant === 'radha-krishna-replacement'
+    ? '/templates/mahadev-radha-krishna-frame.jpg' : variant === 'radha-krishna-replacement'
       ? '/templates/radha-krishna-mountain-frame.jpg' : '/templates/mahadev-parvati-devotional-frame.png';
   return ({ 'radha-krishna-devotional': '/templates/radha-krishna-devotional-frame.png', 'shri-ram-devotional': '/templates/shri-ram-devotional-frame.png', 'pearl-jewel-luxe': '/templates/pearl-jewel-frame.png', 'emerald-gold-registry': '/templates/emerald-gold-frame.png' } as Record<string, string>)[template];
 }
