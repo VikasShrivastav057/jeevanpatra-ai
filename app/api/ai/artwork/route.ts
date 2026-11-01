@@ -34,6 +34,7 @@ export async function POST(request: Request) {
   if (typeof requestId !== 'string' || !/^[a-f0-9-]{36}$/.test(requestId)) return fail('Start a fresh artwork request.');
   if (pending.has(owner)) return fail('An artwork request is already running. Wait for its preview.', 429);
   pending.add(owner);
+  let stage = 'cache';
   try {
     const fingerprint = JSON.stringify({ requestId, template, variant, prompt, area, current, reference });
     const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(fingerprint)));
@@ -43,20 +44,26 @@ export async function POST(request: Request) {
     const replacement = { src: `/api/photo/${filename}`, template, variant };
     // A retry of the same request reuses its private result instead of charging twice.
     if (await get(key, { access: 'private', useCache: false })) return Response.json({ replacement });
+    stage = 'quota';
     const quota = await database.prepare("SELECT COUNT(*) AS count FROM activity_logs WHERE user_id = ? AND action = 'artwork_generation_requested' AND created_at > ?").bind(owner, Date.now() - 3_600_000).first<{ count: number }>();
     if (Number(quota?.count) >= 5) return fail('You have used five artwork generations this hour. Try again later or upload an image.', 429);
+    stage = 'template-read';
     const original = isArtworkReplacement(current) ? (await ownedImage(owner, current.src)).bytes : new Uint8Array(await (async () => {
       const response = await fetch(new URL(source, request.url), { signal: AbortSignal.timeout(15_000), redirect: 'error' });
       if (!response.ok) throw new Error('The template artwork could not be opened.');
       return response.arrayBuffer();
     })());
+    stage = 'template-decode';
     const decoded = decodeArtwork(original);
     const images = [{ image_url: `data:image/png;base64,${PNG.sync.write(decoded).toString('base64')}` }];
+    stage = 'reference-read';
     if (isArtworkFile(reference) && referenceConsent === true) {
       const ref = await ownedImage(owner, reference);
       images.push({ image_url: `data:${ref.type};base64,${Buffer.from(ref.bytes).toString('base64')}` });
     }
+    stage = 'activity';
     await logActivity({ session, userId: owner, action: 'artwork_generation_requested', details: { template, area } });
+    stage = 'provider';
     const result = await fetch('https://api.openai.com/v1/images/edits', {
       method: 'POST', headers: { authorization: `Bearer ${runtimeEnv.OPENAI_API_KEY}`, 'content-type': 'application/json' },
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(240_000)]),
@@ -75,11 +82,15 @@ export async function POST(request: Request) {
     }
     const encoded = payload?.data?.[0]?.b64_json;
     if (!encoded || encoded.length > 40_000_000) return fail('The image service returned an invalid picture. Your biodata is unchanged.', 502);
+    stage = 'composite';
     const output = compositeArtwork(decoded, decodeArtwork(Buffer.from(encoded, 'base64')), area);
     if (request.signal.aborted) return fail('Artwork generation was cancelled.', 499);
+    stage = 'storage';
     await put(key, output, { access: 'private', addRandomSuffix: false, allowOverwrite: false, contentType: 'image/png', cacheControlMaxAge: 60 });
     return Response.json({ replacement }, { headers: { 'cache-control': 'no-store' } });
   } catch (error) {
+    // Never log prompts, customer images, identifiers or credentials.
+    console.error('artwork_generation_failed', { stage, name: error instanceof Error ? error.name : 'UnknownError', message: error instanceof Error ? error.message.replace(/https?:\/\/\S+|sk-[\w-]+|profiles\/\S+/g, '[redacted]').slice(0, 200) : 'Unknown failure' });
     return fail(error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name) ? 'The artwork request timed out or was cancelled. Your biodata is unchanged.' : 'Artwork could not be generated or stored. Please try again. Your biodata is unchanged.', 503);
   } finally { pending.delete(owner); }
 }
