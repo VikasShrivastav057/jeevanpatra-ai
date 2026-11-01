@@ -5,6 +5,7 @@ import { getTemplateById, type TemplateId } from '../../../../lib/template-catal
 import { applyFinishingPlan, directFinishingPlan, finishTargets, finishingPlannerInstruction, FinishingPlanError, isRecord, userInstruction, type FieldSummary, type FinishContext, type FinishVisuals, type FinishTarget } from '../../../../lib/finishing-plan';
 import type { TemplateDesign } from '../../../../components/biodata-paper';
 import { isBlessingOffset } from '../../../../lib/blessing-position';
+import { isProfilePhotoSummary } from '../../../../lib/profile-photo-position';
 
 const sections = ['personal', 'family', 'contact', 'preferences'];
 const hex = /^#[\da-f]{6}$/i;
@@ -52,6 +53,10 @@ export async function POST(request: Request) {
     const v = body.currentVisuals;
     if (!isRecord(v) || !frameStyles.includes(String(v.frameStyle)) || !backgroundStyles.includes(String(v.backgroundStyle)) || !isRecord(v.colors) || !['primary', 'accent', 'text'].every(key => typeof (v.colors as Record<string, unknown>)[key] === 'string' && hex.test((v.colors as Record<string, string>)[key])) || typeof v.colors.paper !== 'string' || !hex.test(v.colors.paper) && v.colors.paper !== getTemplateById(template as TemplateId)?.theme.paper) return fail('Your current visual settings could not be read.');
     visuals.frameStyle = v.frameStyle as FinishVisuals['frameStyle']; visuals.backgroundStyle = v.backgroundStyle as FinishVisuals['backgroundStyle']; visuals.colors = v.colors as FinishVisuals['colors'];
+    if (v.profilePhoto !== undefined) {
+      if (!isProfilePhotoSummary(v.profilePhoto)) return fail('Your profile photo position could not be read. Reload the editor and try again.');
+      visuals.profilePhoto = v.profilePhoto;
+    }
     if (v.uploadedArtwork !== undefined) {
       if (!isRecord(v.uploadedArtwork) || !['replace-header', 'above-details', 'below-details'].includes(String(v.uploadedArtwork.placement)) || !['small', 'medium', 'large'].includes(String(v.uploadedArtwork.size)) || Object.keys(v.uploadedArtwork).some(key => !['placement', 'size'].includes(key))) return fail('Check the uploaded image settings.');
       visuals.uploadedArtwork = v.uploadedArtwork as NonNullable<FinishVisuals['uploadedArtwork']>;

@@ -5,11 +5,13 @@ import { readBlessingEdit } from './blessing-edit';
 import { blessingMoveDirections, isBlessingOffset, referencesBlessing, unquotedPositionInstruction } from './blessing-position';
 import { alphabeticalFieldIds, canonicalFieldOrder, expandFieldOrderEvidence, fieldOrderGroup, hasFieldOrderIntent, orderMentionedIds, readFieldOrderRequest, requestsFieldOrder } from './field-order';
 import { finishingClauses, maskQuotedInstruction } from './finishing-instruction';
+import { readProfilePhotoMove, referencesProfilePhoto, requestsProfilePhotoMove, type ProfilePhotoSummary } from './profile-photo-position';
+import { isPhotoOffset } from './photo-adjustment';
 
 export const finishTargets = ['layout', 'colors', 'typography', 'photo', 'border', 'spacing', 'sections', 'header', 'introduction'] as const;
 export type FinishTarget = typeof finishTargets[number];
 export type FieldSummary = { id: string; label: string; section: 'personal' | 'family' | 'contact' | 'preferences'; hasValue: boolean; group?: string };
-export type FinishVisuals = { frameStyle: FrameStyle; backgroundStyle: BackgroundStyle; colors: TemplateColors; uploadedArtwork?: Pick<UploadedArtwork, 'placement' | 'size'> };
+export type FinishVisuals = { frameStyle: FrameStyle; backgroundStyle: BackgroundStyle; colors: TemplateColors; uploadedArtwork?: Pick<UploadedArtwork, 'placement' | 'size'>; profilePhoto?: ProfilePhotoSummary };
 export type FinishContext = { instruction: string; introduction: string; template: string; design: TemplateDesign; fields: FieldSummary[]; visuals: FinishVisuals; targets: FinishTarget[]; mode: 'requested-only' | 'balanced' | 'best-version' };
 export type FinishChange = { target: string; label: string; before: string; after: string };
 export type FinishResult = { introduction: string; fieldOrder: string[]; fieldUpdates: Array<{ id: string; label?: string; section?: FieldSummary['section']; group?: string }>; design: TemplateDesign; visuals: FinishVisuals; changes: FinishChange[] };
@@ -26,7 +28,7 @@ const domains: Record<FinishTarget, RegExp> = {
   header: /\b(blessing|invocation|mantra|title|header|name|text)\b|शिवाय|राधा|कृष्ण/i,
   introduction: /\b(introduction|about me|bio paragraph|intro|paragraph)\b/i,
 };
-const labels: Record<string, string> = { 'design.primary': 'Heading colour', 'design.accent': 'Accent colour', 'design.paper': 'Paper colour', 'design.text': 'Text colour', 'design.fontStyle': 'Font style', 'design.photoShape': 'Profile photo shape', 'design.layout': 'Layout', 'design.density': 'Spacing', 'design.blessingOverride': 'Devotional text', 'design.blessingOffsetX': 'Devotional text · horizontal position', 'design.blessingOffsetY': 'Devotional text · vertical position', 'design.nameSize': 'Name size', frameStyle: 'Border shape', backgroundStyle: 'Background print', artwork: 'Devotional artwork', 'uploadedArtwork.placement': 'Uploaded image placement', 'uploadedArtwork.size': 'Uploaded image size', introduction: 'Introduction', fieldOrder: 'Field order' };
+const labels: Record<string, string> = { 'profilePhoto.offsetX': 'Profile photo · horizontal position', 'profilePhoto.offsetY': 'Profile photo · vertical position', 'design.primary': 'Heading colour', 'design.accent': 'Accent colour', 'design.paper': 'Paper colour', 'design.text': 'Text colour', 'design.fontStyle': 'Font style', 'design.photoShape': 'Profile photo shape', 'design.layout': 'Layout', 'design.density': 'Spacing', 'design.blessingOverride': 'Devotional text', 'design.blessingOffsetX': 'Devotional text · horizontal position', 'design.blessingOffsetY': 'Devotional text · vertical position', 'design.nameSize': 'Name size', frameStyle: 'Border shape', backgroundStyle: 'Background print', artwork: 'Devotional artwork', 'uploadedArtwork.placement': 'Uploaded image placement', 'uploadedArtwork.size': 'Uploaded image size', introduction: 'Introduction', fieldOrder: 'Field order' };
 const enums: Record<string, readonly string[]> = {
   'design.fontStyle': ['classic', 'modern', 'traditional'], 'design.photoShape': ['circle', 'rounded', 'square'], 'design.layout': ['classic', 'portrait-top'], 'design.density': ['compact', 'balanced', 'airy'], 'design.nameSize': ['small', 'normal', 'large'],
   frameStyle: ['template', 'square', 'rounded', 'arch', 'oval', 'circle', 'double'], backgroundStyle: ['template', 'plain', 'parchment', 'dots', 'geometric', 'weave', 'radiant'], artwork: ['template', 'mahadev-radha-krishna', 'radha-krishna-replacement'],
@@ -53,7 +55,7 @@ function sourceFieldIds(clause: string, fields: FieldSummary[]) {
 function area(target: string): FinishTarget {
   if (target.startsWith('field')) return 'sections';
   if (target === 'introduction') return 'introduction';
-  if (target.startsWith('uploadedArtwork.') || target === 'artwork') return 'photo';
+  if (target.startsWith('uploadedArtwork.') || target.startsWith('profilePhoto.') || target === 'artwork') return 'photo';
   if (target === 'frameStyle' || target === 'backgroundStyle') return 'border';
   if (target === 'design.blessingOverride' || target === 'design.nameSize' || target === 'design.blessingOffsetX' || target === 'design.blessingOffsetY') return 'header';
   if (target === 'design.photoShape') return 'photo';
@@ -64,6 +66,11 @@ function area(target: string): FinishTarget {
 }
 
 function relevant(target: string, text: string) {
+  if (target.startsWith('profilePhoto.offset')) {
+    const d = blessingMoveDirections(text);
+    return requestsProfilePhotoMove(text) && (target.endsWith('X') ? d.left || d.right : d.up || d.down);
+  }
+  if (target === 'design.photoShape') return !requestsProfilePhotoMove(text) && /\b(photo|portrait|profile picture)\b/i.test(text) && /\b(shape|square|circle|circular|rounded)\b/i.test(text);
   if (target === 'fieldOrder') return requestsFieldOrder(text);
   if (target === 'design.blessingOffsetX' || target === 'design.blessingOffsetY') {
     if (/\blower[ -]?case\b/i.test(text) || /\b(font|size|wording|content)\b/i.test(text) && !/\b(move|shift|nudge|position|placement|horizontal|vertical)\b/i.test(text)) return false;
@@ -92,6 +99,8 @@ function locked(target: string, instruction: string) {
   // General "everything else" constraints never grant or revoke a specific edit.
   return clauses(instruction).some(clause => {
     if (/\b(other|everything else|rest)\b/i.test(clause) || !negative(clause)) return false;
+    if (target.startsWith('profilePhoto.offset')) return (referencesProfilePhoto(clause) || /\bphoto(?:'s)?\s+(?:position|placement)\b/i.test(clause) && !/\b(uploaded|divine|background|extra)\b/i.test(clause)) && /\b(position|placement|move|horizontal|vertical)\b/i.test(clause);
+    if (target === 'design.photoShape') return /\b(photo|portrait|profile picture)\b/i.test(clause) && (/\bshape\b/i.test(clause) || !/\b(crop|size|position|placement|frame)\b/i.test(clause));
     if (target === 'design.blessingOffsetX' || target === 'design.blessingOffsetY') return /\b(blessing|invocation|mantra|text|header)\b/i.test(clause) && relevant(target, clause);
     if (target === 'field.label') return /\b(labels?|names?|rename|relabel)\b/i.test(clause);
     if (target === 'field.section') return /\b(section|grouping|move)\b/i.test(clause);
@@ -134,6 +143,8 @@ export function directFinishingPlan(ctx: FinishContext): unknown {
   if (finishingClauses(ctx.instruction).every(clause => negative(unquote(clause)))) return { operations: [], unfulfilled: [] };
   const combined = directCombinedEdits(ctx);
   if (combined) return combined;
+  const photoMove = directProfilePhotoMove(ctx);
+  if (photoMove) return photoMove;
   const blessing = ctx.design.blessingOverride ?? ctx.design.blessing;
   const replacement = readBlessingEdit(ctx.instruction, blessing);
   if (replacement === undefined) {
@@ -176,12 +187,31 @@ function directCombinedEdits(ctx: FinishContext) {
     if (renames.length) { operations.push(...renames); continue; }
     const style = literalStyleEdit(evidence);
     if (style) { operations.push(style); continue; }
+    if (requestsProfilePhotoMove(evidence)) { operations.push(...profilePhotoOperations(ctx, evidence)); continue; }
     const order = requestsFieldOrder(evidence) ? readFieldOrderRequest(evidence, orderedFields) : undefined;
     if (order) { orderedFields = order.order.map(id => ctx.fields.find(field => field.id === id)!); reordered = true; continue; }
     return undefined;
   }
   if (reordered) operations.push({ target: 'fieldOrder', value: orderedFields.map(field => field.id), evidence: ctx.instruction });
   return operations.length ? { operations, unfulfilled: [] } : undefined;
+}
+
+function profilePhotoOperations(ctx: FinishContext, evidence: string): Operation[] {
+  let move;
+  try { move = readProfilePhotoMove(evidence, ctx.visuals.profilePhoto?.offset); }
+  catch (error) { throw new FinishingPlanError(error instanceof Error ? error.message : 'Clarify the profile photo movement.'); }
+  return move ? [...(move.x !== undefined ? [{ target: 'profilePhoto.offsetX', value: move.x, evidence }] : []), ...(move.y !== undefined ? [{ target: 'profilePhoto.offsetY', value: move.y, evidence }] : [])] : [];
+}
+
+function directProfilePhotoMove(ctx: FinishContext) {
+  const operations = profilePhotoOperations(ctx, ctx.instruction);
+  if (!operations.length) return undefined;
+  for (const clause of finishingClauses(ctx.instruction)) {
+    if (negative(unquote(clause)) || requestsProfilePhotoMove(clause)) continue;
+    if (/^(?:ensure|make sure)\b/i.test(clause) && !/\b(change|replace|add|remove|rename|rewrite|move|shift|resize|font|colou?r)\b/i.test(clause)) continue;
+    return undefined;
+  }
+  return { operations, unfulfilled: [] };
 }
 
 export function assertFinishingRequest(ctx: FinishContext) {
@@ -241,7 +271,7 @@ export function applyFinishingPlan(raw: unknown, ctx: FinishContext): FinishResu
   assertFinishingRequest(ctx);
   if (!isRecord(raw) || !Array.isArray(raw.operations) || !Array.isArray(raw.unfulfilled) || raw.operations.length > 50) throw new FinishingPlanError('AI returned an incomplete edit plan. Nothing was changed. Please try again.');
   if (raw.unfulfilled.length) throw new FinishingPlanError(`Nothing was changed. ${raw.unfulfilled.filter(s => typeof s === 'string').join(' ').slice(0, 600) || 'Please clarify the requested changes.'}`);
-  const result: FinishResult = { introduction: ctx.introduction, fieldOrder: ctx.fields.map(f => f.id), fieldUpdates: [], design: { ...ctx.design }, visuals: { ...ctx.visuals, colors: { ...ctx.visuals.colors }, uploadedArtwork: ctx.visuals.uploadedArtwork ? { ...ctx.visuals.uploadedArtwork } : undefined }, changes: [] };
+  const result: FinishResult = { introduction: ctx.introduction, fieldOrder: ctx.fields.map(f => f.id), fieldUpdates: [], design: { ...ctx.design }, visuals: { ...ctx.visuals, colors: { ...ctx.visuals.colors }, ...(ctx.visuals.profilePhoto ? { profilePhoto: { offset: { ...ctx.visuals.profilePhoto.offset }, bounds: { ...ctx.visuals.profilePhoto.bounds } } } : {}), uploadedArtwork: ctx.visuals.uploadedArtwork ? { ...ctx.visuals.uploadedArtwork } : undefined }, changes: [] };
   const seen = new Set<string>();
   const operations: Operation[] = [];
   const edited = new Set(ctx.design.editedProperties ?? ['borderStyle', 'photoShape', 'layout', 'fontStyle', 'density']);
@@ -291,6 +321,17 @@ export function applyFinishingPlan(raw: unknown, ctx: FinishContext): FinishResu
       before = property === 'blessingOverride' ? ctx.design.blessingOverride ?? ctx.design.blessing : offsetAxis ? ctx.design[property as keyof TemplateDesign] ?? 0 : ctx.design[property as keyof TemplateDesign];
       Object.assign(result.design, { [property]: op.value }); edited.add(property);
       if (isColor) Object.assign(result.visuals.colors, { [property]: op.value });
+    } else if (op.target.startsWith('profilePhoto.offset')) {
+      const photo = result.visuals.profilePhoto;
+      if (!photo) throw new FinishingPlanError('Your profile photo position is unavailable. Upload a profile photo or reload the editor, then retry. Nothing was changed.');
+      const axis = op.target.endsWith('X') ? 'x' : 'y';
+      if (typeof op.value !== 'number' || !isPhotoOffset({ ...photo.offset, [axis]: op.value })) throw new FinishingPlanError('Use Move photo on biodata for a larger photo adjustment. Nothing was changed.');
+      let expected;
+      try { expected = readProfilePhotoMove(op.evidence, ctx.visuals.profilePhoto!.offset); } catch (error) { throw new FinishingPlanError(error instanceof Error ? error.message : 'Clarify the photo movement.'); }
+      if (expected?.[axis] === undefined || expected[axis] !== op.value) throw new FinishingPlanError('AI did not follow the exact profile photo movement. Nothing was changed.');
+      const delta = op.value - ctx.visuals.profilePhoto!.offset[axis], end = photo.bounds[axis] + delta + photo.bounds[axis === 'x' ? 'width' : 'height'];
+      if (photo.bounds[axis] + delta < 0 || end > 100.01) throw new FinishingPlanError('That movement would put the profile photo outside the page. Use a smaller adjustment. Nothing was changed.');
+      before = photo.offset[axis]; photo.offset[axis] = op.value;
     } else if (op.target === 'artwork') {
       if (!ctx.template.startsWith('mahadev-parvati-devotional') || op.value !== resolveDevotionalArtwork(ctx.instruction, ctx.template, ctx.design.artwork)) throw new FinishingPlanError('This image change needs an uploaded image or a different supported artwork choice. Nothing was changed.');
       before = ctx.design.artwork || 'template'; result.design.artwork = op.value as TemplateDesign['artwork'];
@@ -343,9 +384,16 @@ export function applyFinishingPlan(raw: unknown, ctx: FinishContext): FinishResu
       for (const id of value as string[]) { const field = ctx.fields.find(f => f.id === id)!; const title = field.group?.trim() || titles[field.section]; groups.set(title, [...(groups.get(title) || []), field.label]); }
       return [...groups].map(([title, names]) => `${title}: ${names.join(' → ')}`).join('\n');
     };
-    if (JSON.stringify(before) !== JSON.stringify(op.value)) result.changes.push({ target: key, label, before: op.target === 'fieldOrder' ? showOrder(before) : offsetAxis ? showOffset(before) : show(before), after: op.target === 'fieldOrder' ? showOrder(op.value) : offsetAxis ? showOffset(op.value) : show(op.value) });
+    const photoAxis = op.target.startsWith('profilePhoto.offset') ? op.target.endsWith('X') ? 'x' : 'y' : undefined;
+    const showPhotoOffset = (value: unknown) => typeof value === 'number' ? value === 0 ? 'Original photo position' : `${Math.abs(value)}% ${photoAxis === 'x' ? value > 0 ? 'right' : 'left' : value > 0 ? 'down' : 'up'}` : show(value);
+    if (JSON.stringify(before) !== JSON.stringify(op.value)) result.changes.push({ target: key, label, before: op.target === 'fieldOrder' ? showOrder(before) : photoAxis ? showPhotoOffset(before) : offsetAxis ? showOffset(before) : show(before), after: op.target === 'fieldOrder' ? showOrder(op.value) : photoAxis ? showPhotoOffset(op.value) : offsetAxis ? showOffset(op.value) : show(op.value) });
   }
   result.design.editedProperties = [...edited];
+  for (const clause of finishingClauses(ctx.instruction)) {
+    if (!requestsProfilePhotoMove(clause)) continue;
+    const d = blessingMoveDirections(clause);
+    if ((d.left || d.right) && !operations.some(op => op.target === 'profilePhoto.offsetX') || (d.up || d.down) && !operations.some(op => op.target === 'profilePhoto.offsetY')) throw new FinishingPlanError('AI did not include every requested profile photo movement. Nothing was changed.');
+  }
   // A valid subset must not silently stand in for a compound request.
   try {
     if (finishingClauses(ctx.instruction).some(sentence => !negative(unquote(sentence)) && hasFieldOrderIntent(sentence, ctx.fields)) && !operations.some(op => op.target === 'fieldOrder')) throw new FinishingPlanError('AI did not include the requested field order. Nothing was changed. Please retry with the field names in the order you want.');
@@ -364,7 +412,7 @@ export function applyFinishingPlan(raw: unknown, ctx: FinishContext): FinishResu
     const required: string[] = [];
     if (/\b(fonts?|typeface|typography)\b/i.test(clause) && !/\b(colou?r|size|bigger|larger|smaller)\b/i.test(clause)) required.push('design.fontStyle');
     if (/\bname\b/i.test(clause) && /\b(size|larger|bigger|smaller|enlarge|shrink)\b/i.test(clause)) required.push('design.nameSize');
-    if (/\b(photo|portrait|profile picture)\b/i.test(clause) && /\b(shape|circle|circular|rounded|square)\b/i.test(clause) && !/\b(uploaded|extra|additional)\b/i.test(clause)) required.push('design.photoShape');
+    if (/\b(photo|portrait|profile picture)\b/i.test(clause) && /\b(shape|circle|circular|rounded|square)\b/i.test(clause) && !/\b(uploaded|extra|additional)\b/i.test(clause) && !requestsProfilePhotoMove(rawClause)) required.push('design.photoShape');
     if (/\b(spacing|compact|density|airy|gaps?)\b/i.test(clause)) required.push('design.density');
     if (/\b(border|frame)\b/i.test(clause) && /\b(shape|oval|circle|rounded|square|arch|double)\b/i.test(clause)) required.push('frameStyle');
     if (/\b(background|paper)\b/i.test(clause) && /\b(colou?r|#[\da-f]{6}|ivory|white|black|blue|pink)\b/i.test(clause)) required.push('design.paper');
@@ -404,6 +452,7 @@ Targets:
 - design.fontStyle: classic|modern|traditional; design.photoShape: circle|rounded|square for profile portrait; design.density: compact|balanced|airy; design.nameSize: small|normal|large.
 - design.layout: classic|portrait-top for ordinary templates only. Illustrated templates (*-devotional, pearl-jewel-luxe, emerald-gold-registry) have fixed layout, embedded paper and border. Their editable text colours/fonts/spacing/fields and blessing can still change. Never replace artwork to recolour text.
 - design.blessingOverride: exact devotional text, max120, empty to hide. Quoted devotional names are TEXT, never artwork instructions.
+- profilePhoto.offsetX/profilePhoto.offsetY: finite [-20,20], absolute percentage-point offsets from the photo's original position. Requires visuals.profilePhoto. Profile photo movement IS supported on ALL templates. For relative movement add to current offset (right/down positive, left/up negative); slight=1%, and a shared 1% applies to both named axes. Only change requested axes. Never change crop/size/frame/file/artwork/layout to move the photo. Bounds must stay on the page.
 - design.blessingOffsetX [-6,6], design.blessingOffsetY [-4,8]: absolute offsets from original anchor in percent of paper width; positive X right, Y down. Relative move: add delta to current offset; slight right/down +2/+3. Only requested axes; preserve font/content/artwork. Reset=0. Illustrated layouts support these text offsets.
 - frameStyle: template|square|rounded|arch|oval|circle|double. backgroundStyle: template|plain|parchment|dots|geometric|weave|radiant. Ordinary editable templates only.
 - artwork: template|mahadev-radha-krishna|radha-krishna-replacement on mahadev-parvati-devotional only. Add Radha Krishna opposite Mahadev=mahadev-radha-krishna; replace divine couple=radha-krishna-replacement; remove Radha Krishna/restore original=template.

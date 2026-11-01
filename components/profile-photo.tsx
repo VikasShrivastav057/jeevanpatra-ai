@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useRef, type CSSProperties, type PointerEvent, type KeyboardEvent } from 'react';
-import { boundPhotoPlacement, defaultPhotoCrop, dragPhotoCrop, type PhotoAdjustment, type PhotoCrop, type PhotoPlacement } from '../lib/photo-adjustment';
+import { a4Ratio, boundPhotoPlacement, defaultPhotoCrop, dragPhotoCrop, type PhotoAdjustment, type PhotoCrop, type PhotoPlacement } from '../lib/photo-adjustment';
 
 function cropStyle(crop: PhotoCrop): CSSProperties {
   return { objectFit: 'cover', objectPosition: `${crop.x}% ${crop.y}%`, transform: `scale(${crop.zoom})`, transformOrigin: `${crop.x}% ${crop.y}%` };
@@ -11,8 +11,9 @@ function cropStyle(crop: PhotoCrop): CSSProperties {
 export function ProfilePhoto({ src, name, adjustment, onPlacementChange, onMoveEnd }: { src: string; name: string; adjustment?: PhotoAdjustment; onPlacementChange?: (placement: PhotoPlacement) => void; onMoveEnd?: () => void }) {
   const drag = useRef<{ id: number; x: number; y: number; placement: PhotoPlacement; width: number; height: number } | undefined>(undefined);
   const placement = adjustment?.placement;
-  const style: CSSProperties | undefined = placement ? { position: 'absolute', top: `${placement.y}%`, left: `${placement.x}%`, width: `${placement.width}%`, right: 'auto', bottom: 'auto', height: 'auto', aspectRatio: '1', margin: 0, padding: 0, zIndex: 5 } : undefined;
-  const image = src ? <Image src={src} alt={`${name} profile`} fill unoptimized loading="eager" draggable={false} style={adjustment ? cropStyle(adjustment.crop) : undefined} /> : <span className="portrait-placeholder">Add photo</span>;
+  const offset = adjustment?.offset;
+  const style: CSSProperties | undefined = placement || offset ? { ...(placement ? { position: 'absolute', top: `${placement.y}%`, left: `${placement.x}%`, width: `${placement.width}%`, right: 'auto', bottom: 'auto', height: 'auto', aspectRatio: '1', margin: 0, padding: 0, zIndex: 5 } as CSSProperties : {}), ...(offset && (offset.x || offset.y) ? { translate: `${offset.x}cqw ${offset.y / a4Ratio}cqw` } : {}) } : undefined;
+  const image = src ? <Image src={src} alt={`${name} profile`} fill unoptimized loading="eager" draggable={false} style={adjustment?.crop ? cropStyle(adjustment.crop) : undefined} /> : <span className="portrait-placeholder">Add photo</span>;
   if (!onPlacementChange || !placement) return <div className={`portrait-frame ${placement ? 'portrait-manual' : ''}`} data-profile-photo="true" style={style}>{image}</div>;
   function start(event: PointerEvent<HTMLButtonElement>) {
     if (event.button !== 0 || !placement) return;
@@ -62,4 +63,3 @@ export function PhotoCropEditor({ src, crop, onChange, radius }: { src: string; 
     <button className="soft-button" type="button" onClick={() => onChange({ ...defaultPhotoCrop })}>Reset crop</button>
   </div>;
 }
-

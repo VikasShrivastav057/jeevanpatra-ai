@@ -1,6 +1,7 @@
 export type PhotoCrop = { x: number; y: number; zoom: number };
 export type PhotoPlacement = { x: number; y: number; width: number };
-export type PhotoAdjustment = { crop: PhotoCrop; placement?: PhotoPlacement };
+export type PhotoOffset = { x: number; y: number };
+export type PhotoAdjustment = { crop: PhotoCrop; placement?: PhotoPlacement; offset?: PhotoOffset } | { crop?: undefined; placement?: undefined; offset: PhotoOffset };
 export const defaultPhotoCrop: PhotoCrop = { x: 50, y: 18, zoom: 1 };
 export const a4Ratio = 210 / 297;
 const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
@@ -8,8 +9,14 @@ const round = (n: number) => Math.round(n * 1000) / 1000;
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const record = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 
+export function isPhotoOffset(v: unknown): v is PhotoOffset {
+  return record(v) && Object.keys(v).every(k => ['x', 'y'].includes(k)) && finite(v.x) && finite(v.y) && Math.abs(v.x) <= 20 && Math.abs(v.y) <= 20;
+}
+
 export function isPhotoAdjustment(v: unknown): v is PhotoAdjustment {
-  if (!record(v) || Object.keys(v).some(k => !['crop', 'placement'].includes(k)) || !record(v.crop)) return false;
+  if (!record(v) || Object.keys(v).some(k => !['crop', 'placement', 'offset'].includes(k)) || v.offset !== undefined && !isPhotoOffset(v.offset)) return false;
+  if (v.crop === undefined) return isPhotoOffset(v.offset) && v.placement === undefined;
+  if (!record(v.crop)) return false;
   const c = v.crop;
   if (Object.keys(c).some(k => !['x', 'y', 'zoom'].includes(k)) || !finite(c.x) || !finite(c.y) || !finite(c.zoom) || c.x < 0 || c.x > 100 || c.y < 0 || c.y > 100 || c.zoom < 1 || c.zoom > 3) return false;
   if (v.placement === undefined) return true;
@@ -45,4 +52,3 @@ export function sameExceptPhotoAdjustment(saved: string, current: string) {
     return JSON.stringify(a) === JSON.stringify(b);
   } catch { return false; }
 }
-

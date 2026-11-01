@@ -10,7 +10,7 @@ import { printBiodata } from '../../lib/print-biodata';
 import { isUploadedArtwork, type UploadedArtwork } from '../../lib/uploaded-artwork';
 import type { FinishResult } from '../../lib/finishing-plan';
 import { PhotoCropEditor } from '../../components/profile-photo';
-import { boundPhotoPlacement, defaultPhotoCrop, isPhotoAdjustment, resizePhoto, sameExceptPhotoAdjustment, type PhotoAdjustment, type PhotoCrop } from '../../lib/photo-adjustment';
+import { boundPhotoPlacement, defaultPhotoCrop, isPhotoAdjustment, isPhotoOffset, resizePhoto, sameExceptPhotoAdjustment, type PhotoAdjustment, type PhotoCrop } from '../../lib/photo-adjustment';
 import { isBlessingOffset } from '../../lib/blessing-position';
 import { BiodataPaper, type BackgroundStyle, type FieldSection, type FrameStyle, type ProfileField, type TemplateColors, type TemplateDesign } from '../../components/biodata-paper';
 
@@ -434,7 +434,7 @@ export default function Home() {
   }
   function startPhotoMove() {
     if (!photo || photoState === 'uploading') return;
-    if (!photoAdjustment?.placement) {
+    if (!photoAdjustment?.placement || photoAdjustment.offset && (photoAdjustment.offset.x || photoAdjustment.offset.y)) {
       const paper = document.querySelector('.preview-shell .bio-paper')?.getBoundingClientRect();
       const frame = document.querySelector('[data-profile-photo]')?.getBoundingClientRect();
       if (!paper?.width || !paper.height || !frame?.width) return;
@@ -465,14 +465,14 @@ export default function Home() {
     setTimeout(() => setSaveState('Save my biodata'), 2200);
     return true;
   }
-  async function persistProfile(input: { completed: boolean; signature: string; nextAbout?: string; nextFields?: ProfileField[]; nextCustomDesign?: TemplateDesign; nextFinishDesign?: TemplateDesign; nextFrameStyle?: FrameStyle; nextBackgroundStyle?: BackgroundStyle; nextColorPreset?: ColorPresetId; nextColors?: TemplateColors; nextArtwork?: UploadedArtwork }) {
+  async function persistProfile(input: { completed: boolean; signature: string; nextAbout?: string; nextFields?: ProfileField[]; nextCustomDesign?: TemplateDesign; nextFinishDesign?: TemplateDesign; nextFrameStyle?: FrameStyle; nextBackgroundStyle?: BackgroundStyle; nextColorPreset?: ColorPresetId; nextColors?: TemplateColors; nextArtwork?: UploadedArtwork; nextPhotoAdjustment?: PhotoAdjustment }) {
     const response = await fetch('/api/biodata', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
       name,
       introduction: input.nextAbout ?? about,
       template,
       photoKey,
       completed: input.completed,
-      details: { profileFields: input.nextFields ?? profileFields, customDesign: input.nextCustomDesign ?? customDesign, finishDesign: input.nextFinishDesign ?? finishDesign, frameStyle: input.nextFrameStyle ?? frameStyle, backgroundStyle: input.nextBackgroundStyle ?? backgroundStyle, colorPreset: input.nextColorPreset ?? colorPreset, customColors: input.nextColors ?? customColors, completionSignature: input.signature, uploadedArtwork: input.nextArtwork ?? uploadedArtwork ?? null, photoAdjustment: photoAdjustment ?? null },
+      details: { profileFields: input.nextFields ?? profileFields, customDesign: input.nextCustomDesign ?? customDesign, finishDesign: input.nextFinishDesign ?? finishDesign, frameStyle: input.nextFrameStyle ?? frameStyle, backgroundStyle: input.nextBackgroundStyle ?? backgroundStyle, colorPreset: input.nextColorPreset ?? colorPreset, customColors: input.nextColors ?? customColors, completionSignature: input.signature, uploadedArtwork: input.nextArtwork ?? uploadedArtwork ?? null, photoAdjustment: input.nextPhotoAdjustment ?? photoAdjustment ?? null },
     }) });
     if (response.status === 401) { window.location.href = `/login?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`; throw new Error('Sign in to continue.'); }
     const data = await response.json().catch(() => ({})) as { error?: string };
@@ -646,7 +646,11 @@ export default function Home() {
       const theme = getTemplateById(template)?.theme;
       const activeDesign = template === 'ai-custom' ? customDesign : finishDesign;
       const currentColors = activeColorOverride || activeDesign || theme || defaultCustomColors;
-      const response = await fetch('/api/ai/finalize', { method: 'POST', signal: controller.signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, introduction: about, fields: fieldSummary, stylePreference, recommendation: styleRecommendation.trim(), changeTargets: finishChangeTargets, improvementMode: finishImprovementMode, currentTemplate: template, currentDesign: activeDesign, currentVisuals: { frameStyle, backgroundStyle, colors: { primary: currentColors.primary, accent: currentColors.accent, paper: currentColors.paper, text: currentColors.text }, ...(uploadedArtwork ? { uploadedArtwork: { placement: uploadedArtwork.placement, size: uploadedArtwork.size } } : {}) } }) });
+      const paper = document.querySelector('.preview-shell .bio-paper')?.getBoundingClientRect();
+      const portrait = document.querySelector('.preview-shell [data-profile-photo]')?.getBoundingClientRect();
+      const percent = (value: number) => Math.round(value * 100_000) / 1000;
+      const profilePhoto = photo && paper?.width && paper.height && portrait?.width ? { offset: photoAdjustment?.offset ?? { x: 0, y: 0 }, bounds: { x: percent((portrait.left - paper.left) / paper.width), y: percent((portrait.top - paper.top) / paper.height), width: percent(portrait.width / paper.width), height: percent(portrait.height / paper.height) } } : undefined;
+      const response = await fetch('/api/ai/finalize', { method: 'POST', signal: controller.signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, introduction: about, fields: fieldSummary, stylePreference, recommendation: styleRecommendation.trim(), changeTargets: finishChangeTargets, improvementMode: finishImprovementMode, currentTemplate: template, currentDesign: activeDesign, currentVisuals: { frameStyle, backgroundStyle, colors: { primary: currentColors.primary, accent: currentColors.accent, paper: currentColors.paper, text: currentColors.text }, ...(profilePhoto ? { profilePhoto } : {}), ...(uploadedArtwork ? { uploadedArtwork: { placement: uploadedArtwork.placement, size: uploadedArtwork.size } } : {}) } }) });
       const data = await readApiResponse<FinishResult>(response, 'AI could not prepare these changes.');
       if (finishRequest.current !== controller || controller.signal.aborted) return;
       if (latestFinishSignature.current !== signature) throw new Error('Your biodata changed while AI was working. Generate a fresh plan; nothing was applied.');
@@ -681,11 +685,15 @@ export default function Home() {
       const nextColorPreset = updateManualPalette ? 'custom' as const : colorPreset;
       const nextColors = updateManualPalette ? data.visuals.colors : customColors;
       const nextArtwork = uploadedArtwork && data.visuals.uploadedArtwork ? { ...uploadedArtwork, ...data.visuals.uploadedArtwork } : uploadedArtwork;
-      const signature = completionSignature({ name, about: data.introduction, profileFields: nextFields, template, customDesign: nextCustomDesign, finishDesign: nextFinishDesign, frameStyle: nextFrameStyle, backgroundStyle: nextBackgroundStyle, colorPreset: nextColorPreset, customColors: nextColors, uploadedArtwork: nextArtwork, photoAdjustment });
+      const photoMoved = data.changes.some(change => /^profilePhoto\.offset[XY]:/.test(change.target));
+      if (photoMoved && !isPhotoOffset(data.visuals.profilePhoto?.offset)) throw new Error('The profile photo movement could not be verified. Nothing was applied.');
+      const nextPhotoAdjustment: PhotoAdjustment | undefined = photoMoved ? { ...photoAdjustment, offset: data.visuals.profilePhoto!.offset } : photoAdjustment;
+      const signature = completionSignature({ name, about: data.introduction, profileFields: nextFields, template, customDesign: nextCustomDesign, finishDesign: nextFinishDesign, frameStyle: nextFrameStyle, backgroundStyle: nextBackgroundStyle, colorPreset: nextColorPreset, customColors: nextColors, uploadedArtwork: nextArtwork, photoAdjustment: nextPhotoAdjustment });
       // Save successfully before committing any of the AI edits to the editor.
-      await persistProfile({ completed: true, signature, nextAbout: data.introduction, nextFields, nextCustomDesign, nextFinishDesign, nextFrameStyle, nextBackgroundStyle, nextColorPreset, nextColors, nextArtwork });
+      await persistProfile({ completed: true, signature, nextAbout: data.introduction, nextFields, nextCustomDesign, nextFinishDesign, nextFrameStyle, nextBackgroundStyle, nextColorPreset, nextColors, nextArtwork, nextPhotoAdjustment });
       setAbout(data.introduction); setProfileFields(nextFields);
       setFrameStyle(nextFrameStyle); setBackgroundStyle(nextBackgroundStyle); setColorPreset(nextColorPreset); setCustomColors(nextColors); setUploadedArtwork(nextArtwork);
+      if (photoMoved) { setPhotoAdjustment(nextPhotoAdjustment); setPhotoMoveMode(false); }
       if (template === 'ai-custom') {
         setCustomDesign(data.design);
         setFinishDesign(undefined);
@@ -748,7 +756,7 @@ export default function Home() {
                 <label htmlFor="profile-frame-size">Photo size on biodata <output>{Math.round(photoAdjustment.placement.width)}%</output><input id="profile-frame-size" type="range" min="10" max="45" step="0.1" value={photoAdjustment.placement.width} onChange={event => { const width = Number(event.target.value); setPhotoAdjustment(current => current?.placement ? { ...current, placement: resizePhoto(current.placement, width) } : current); }} /></label>
                 <label>Photo left / right<input type="range" min="0" max={100 - photoAdjustment.placement.width} step="0.1" value={photoAdjustment.placement.x} onChange={event => { const x = Number(event.target.value); setPhotoAdjustment(current => current?.placement ? { ...current, placement: boundPhotoPlacement({ ...current.placement, x }) } : current); }} /></label>
                 <label>Photo up / down<input type="range" min="0" max={100 - photoAdjustment.placement.width * 210 / 297} step="0.1" value={photoAdjustment.placement.y} onChange={event => { const y = Number(event.target.value); setPhotoAdjustment(current => current?.placement ? { ...current, placement: boundPhotoPlacement({ ...current.placement, y }) } : current); }} /></label>
-                <div className="flex flex-wrap gap-2"><button type="button" className="primary-button" onClick={() => setPhotoMoveMode(false)}>Done positioning</button><button type="button" className="soft-button" onClick={() => { setPhotoAdjustment(current => current ? { crop: current.crop } : undefined); setPhotoMoveMode(false); }}>Reset photo position</button></div>
+                <div className="flex flex-wrap gap-2"><button type="button" className="primary-button" onClick={() => setPhotoMoveMode(false)}>Done positioning</button><button type="button" className="soft-button" onClick={() => { setPhotoAdjustment(current => current?.crop ? { crop: current.crop } : undefined); setPhotoMoveMode(false); }}>Reset photo position</button></div>
               </section>}
               <BiodataPaper template={template} photo={photo} name={name} about={about} fields={profileFields} design={template === 'ai-custom' ? customDesign : finishDesign} uploadedArtwork={uploadedArtwork} photoAdjustment={photoAdjustment} onPhotoPlacementChange={photoMoveMode ? placement => setPhotoAdjustment(current => ({ crop: current?.crop || { ...defaultPhotoCrop }, placement })) : undefined} onPhotoMoveEnd={() => setPhotoMoveMode(false)} frameStyle={frameStyle} backgroundStyle={backgroundStyle} colorOverride={activeColorOverride} />
             </section>
@@ -826,7 +834,7 @@ export default function Home() {
         <p className="eyebrow mx-auto w-fit">AI finishing studio</p>
         <h2 className="mt-4 text-center font-serif text-3xl">What should AI improve?</h2>
         <p className="mt-3 text-center text-sm leading-6 text-[var(--muted)]">Describe exactly what to change. Review the proposed edits before saving; everything else stays as it is.</p>
-        <p className="mt-2 text-center text-xs leading-5 text-[var(--muted)]">Change text, fonts, colours, spacing, editable borders, field labels and grouping, or your uploaded image size and placement. Illustrated artwork has fixed parts; AI will explain when a request needs another template or an uploaded image.</p>
+        <p className="mt-2 text-center text-xs leading-5 text-[var(--muted)]">Change text, fonts, colours, spacing, editable borders, field labels and grouping, profile photo position, or your uploaded image size and placement. Illustrated artwork has fixed parts; AI will explain when a request needs another template or an uploaded image.</p>
         <fieldset disabled={finishState === 'loading' || finishState === 'saving'} className="m-0 border-0 p-0">
         <div className="finish-studio-grid mt-6">
           <div>
