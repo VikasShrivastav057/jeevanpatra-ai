@@ -45,7 +45,7 @@ for (const artwork of ['template', 'mahadev-radha-krishna', 'radha-krishna-repla
  assert.equal(r.design.blessingOverride, 'Jai Shri RadhaKrishna'); assert.equal(r.design.artwork, artwork); assert.deepEqual(r.visuals, baseline.visuals); assert.equal(r.changes.length, 1); assert.deepEqual(r.fieldUpdates, []); assert.equal(r.introduction, baseline.introduction);
 }
 assert.equal(directFinishingPlan({ ...baseline, instruction: exact + ' Also change the font to modern.' }), undefined); count++;
-assert.equal(directFinishingPlan({ ...baseline, instruction: exact + ' Also add a QR code.' }), undefined); count++;
+assert.throws(() => directFinishingPlan({ ...baseline, instruction: exact + ' Also add a QR code.' }), FinishingPlanError); count++;
 const heading = 'Change only the heading colour to #84252b. Keep the paper, body text, artwork and fields unchanged.';
 const r = run(heading, [op('design.primary', '#84252b', 'Change only the heading colour to #84252b')]);
 assert.equal(r.design.primary, '#84252b'); assert.equal(r.design.paper, baseline.design.paper); assert.deepEqual(r.fieldOrder, baseline.fields.map(f => f.id)); assert.deepEqual(r.design.editedProperties, ['primary']); assert.equal(r.changes.length, 1);

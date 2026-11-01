@@ -46,7 +46,37 @@ function scopedFields(text: string, fields: OrderableField[]) {
 }
 
 export function orderMentionedIds(text: string, fields: OrderableField[]): string[] {
-  return [...new Set(text.split(/[.!?;\n]/).flatMap(sentence => fieldMentions(sentence, scopedFields(sentence, fields)).map(m => m.id)))];
+  return [...new Set(flattenFieldLists(text, fields).split(/[.!?;\n]/).flatMap(sentence => fieldMentions(sentence, scopedFields(sentence, fields)).map(m => m.id)))];
+}
+
+function fieldListBlocks(text: string, fields: OrderableField[]) {
+  const lines = text.split('\n'), blocks: Array<{ start: number; end: number; collapsed: string }> = []; let offset = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const heading = lines[i].trim();
+    if (/\b(?:order|sequence)\b[^\n]*:\s*$/i.test(heading) && requestsFieldOrder(heading)) {
+      const available = scopedFields(heading, fields), names: string[] = []; let end = offset + lines[i].length;
+      for (let j = i + 1; j < lines.length; j++) {
+        const name = normalize(lines[j].replace(/^\s*(?:[-*•]|\d+[.)])\s*/, ''));
+        if (!name || !available.some(f => normalize(f.label) === name || normalize(f.label) === 'date of birth' && name === 'dob')) break;
+        names.push(name); end += 1 + lines[j].length;
+      }
+      if (names.length >= 2) blocks.push({ start: offset, end, collapsed: `${heading} ${names.join(', ')}` });
+    }
+    offset += lines[i].length + 1;
+  }
+  return blocks;
+}
+
+function flattenFieldLists(text: string, fields: OrderableField[]) {
+  for (const block of fieldListBlocks(text, fields).reverse()) text = text.slice(0, block.start) + block.collapsed + text.slice(block.end);
+  return text;
+}
+
+/** A list-heading citation includes only its immediately following, explicitly named rows. */
+export function expandFieldOrderEvidence(evidence: string, instruction: string, fields: OrderableField[]) {
+  if (!instruction.includes(evidence)) return evidence;
+  const block = fieldListBlocks(instruction, fields).find(b => instruction.slice(b.start, b.end).startsWith(evidence.trim()) && /:\s*$/.test(evidence));
+  return block ? instruction.slice(block.start, block.end) : evidence;
 }
 
 export function alphabeticalFieldIds(text: string, fields: OrderableField[]): string[] {
@@ -66,7 +96,7 @@ export function hasFieldOrderIntent(text: string, fields: OrderableField[]) {
 
 /** Resolve common ordering requests without asking the language model to regenerate fields. */
 export function readFieldOrderRequest(instruction: string, fields: OrderableField[]): FieldOrderRequest | undefined {
-  const sentences = instruction.split(/[.!?;\n]/).map(s => s.trim()).filter(Boolean);
+  const sentences = flattenFieldLists(instruction, fields).split(/[.!?;\n]/).map(s => s.trim()).filter(Boolean);
   let order = fields.map(f => f.id), found = false;
   for (const sentence of sentences) {
     if (!requestsFieldOrder(sentence)) {

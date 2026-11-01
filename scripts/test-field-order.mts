@@ -13,6 +13,9 @@ check('Move Education last in Personal details.', ['name', 'job', 'dob', 'height
 check('Move Height to the bottom.', ids);
 check('Reorder personal fields as Full Name, DOB, Height, Education, Profession.', ['name', 'dob', 'height', 'edu', 'job', ...tail]);
 check('Field order: Education, Profession, Full Name, Height, Date of birth.', ['edu', 'job', 'name', 'height', 'dob', ...tail]);
+check('Arrange the personal fields in this sequence:\nFull Name\nDate of birth\nHeight\nEducation\nProfession\nKeep all other fields and the design unchanged.', ['name', 'dob', 'height', 'edu', 'job', ...tail]);
+check('Reorder personal fields in this order:\n1. Full Name\n2. DOB\n3. Height\n4. Education\n5. Profession', ['name', 'dob', 'height', 'edu', 'job', ...tail]);
+check('Reorder Residential Address in this order:\n- Zip code\n- Address\nKeep the design unchanged.', [...ids.slice(0, 9), 'zip', 'address']);
 check('Sort personal fields alphabetically.', ['dob', 'edu', 'name', 'height', 'job', ...tail]);
 check('Move Email above Phone.', [...ids.slice(0, 7), 'email', 'phone', ...ids.slice(9)]);
 check('Move Zip code before Address within Residential Address.', [...ids.slice(0, 9), 'zip', 'address']);

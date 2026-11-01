@@ -10,7 +10,7 @@ const sections = ['personal', 'family', 'contact', 'preferences'];
 const hex = /^#[\da-f]{6}$/i;
 const frameStyles = ['template', 'square', 'rounded', 'arch', 'oval', 'circle', 'double'];
 const backgroundStyles = ['template', 'plain', 'parchment', 'dots', 'geometric', 'weave', 'radiant'];
-const fail = (error: string, status = 400) => Response.json({ error }, { status });
+const fail = (error: string, status = 400, retryAfter?: number) => Response.json({ error, ...(retryAfter ? { retryAfter } : {}) }, { status, ...(retryAfter ? { headers: { 'retry-after': String(retryAfter) } } : {}) });
 
 function currentDesign(value: unknown, template: string): TemplateDesign | undefined {
   const base = getTemplateById(template as TemplateId);
@@ -64,36 +64,59 @@ export async function POST(request: Request) {
     const direct = directFinishingPlan(ctx);
     if (direct) {
       const orderEdit = isRecord(direct) && Array.isArray(direct.operations) && direct.operations.some(op => isRecord(op) && op.target === 'fieldOrder');
-      return Response.json({ ...applyFinishingPlan(direct, ctx), model: orderEdit ? 'field-order-edit' : 'header-text-edit' });
+      const styleEdit = isRecord(direct) && Array.isArray(direct.operations) && direct.operations.some(op => isRecord(op) && !['design.blessingOverride', 'design.blessingOffsetX', 'design.blessingOffsetY'].includes(String(op.target)));
+      return Response.json({ ...applyFinishingPlan(direct, ctx), model: orderEdit ? 'field-order-edit' : styleEdit ? 'verified-style-edit' : 'header-text-edit' });
     }
   } catch (error) { return fail(error instanceof Error ? error.message : 'The requested edit could not be applied.', 422); }
   const apiKey = runtimeEnv.GROQ_API_KEY;
   if (!apiKey) return fail('Groq is not connected yet.', 503);
   let lastError = 'AI could not prepare a verified edit plan. Nothing was changed. Please try again.';
+  let lastStatus = 422;
+  let repair: { content: string; reason: string } | undefined;
+  let retryAfter: number | undefined;
+  const limitedModels = new Set<string>();
   const deadline = Date.now() + 48_000;
-  for (const model of getGroqTextModels(runtimeEnv.GROQ_MODEL)) {
+  const models = getGroqTextModels(runtimeEnv.GROQ_MODEL);
+  // One repair opportunity plus provider/model fallback, bounded by the same request deadline.
+  const attempts = [...models, models.at(-1)!].slice(0, 3);
+  for (const model of attempts) {
+    if (limitedModels.has(model)) continue;
+    if (request.signal.aborted) return fail('The request was cancelled. Nothing was changed.', 499);
     if (Date.now() >= deadline) return fail('AI took too long. Nothing was changed. Please retry.', 504);
     let response: Response;
     try {
       response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, signal: AbortSignal.any([request.signal, AbortSignal.timeout(Math.min(40_000, deadline - Date.now()))]),
-        body: JSON.stringify({ model, temperature: 0, max_tokens: 3200, ...(model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'medium' } : {}), response_format: { type: 'json_object' }, messages: [{ role: 'system', content: finishingPlannerInstruction }, { role: 'user', content: JSON.stringify({ ...ctx, stylePreference: typeof body.stylePreference === 'string' ? body.stylePreference.slice(0, 80) : 'Traditional' }) }] }),
+        method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' }, signal: AbortSignal.any([request.signal, AbortSignal.timeout(Math.min(22_000, deadline - Date.now()))]),
+        body: JSON.stringify({ model, temperature: 0, max_tokens: Math.min(4000, 1200 + fields.length * 26), ...(model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'medium' } : {}), response_format: { type: 'json_object' }, messages: [{ role: 'system', content: finishingPlannerInstruction }, { role: 'user', content: JSON.stringify({ ...ctx, stylePreference: typeof body.stylePreference === 'string' ? body.stylePreference.slice(0, 80) : 'Traditional' }) }, ...(repair ? [{ role: 'assistant', content: repair.content }, { role: 'user', content: `The previous plan failed verification: ${repair.reason}\nRe-read the original, unchanged instruction and return a corrected complete plan. Preserve every unrelated property. Do not bypass the schema or invent a workaround. If a change is actually unsupported, explain it in unfulfilled. Supported field ordering, editable text and text position must not be reported as unsupported.` }] : [])] }),
       });
-    } catch { return fail('AI took too long or could not be reached. Nothing was changed. Please retry.', 502); }
+    } catch {
+      if (request.signal.aborted) return fail('The request was cancelled. Nothing was changed.', 499);
+      lastError = 'AI took too long or could not be reached. Nothing was changed. Please retry.'; lastStatus = 502; continue;
+    }
     let upstream: unknown;
     try { upstream = await response.json(); } catch { upstream = undefined; }
     if (!response.ok) {
       if (response.status === 400 || response.status === 404) continue;
-      if (response.status === 429) { lastError = 'AI is busy. Nothing was changed. Please try again shortly.'; continue; }
-      return fail('The AI service could not complete this request. Nothing was changed.', 502);
+      if (response.status === 429) {
+        limitedModels.add(model);
+        const wait = Number(response.headers.get('retry-after'));
+        const seconds = Number.isFinite(wait) && wait > 0 ? Math.min(86_400, Math.ceil(wait)) : 30;
+        retryAfter = retryAfter ? Math.min(retryAfter, seconds) : seconds;
+        lastError = `Groq has reached its request limit. Try again in ${retryAfter} seconds. Your biodata has not been changed; you can still save and download it.`; lastStatus = 429; continue;
+      }
+      lastError = 'The AI service could not complete this request. Nothing was changed.'; lastStatus = 502;
+      if (response.status >= 500) continue;
+      return fail(lastError, lastStatus);
     }
     const choices = isRecord(upstream) && Array.isArray(upstream.choices) ? upstream.choices : [];
     const message = isRecord(choices[0]) && isRecord(choices[0].message) ? choices[0].message : {};
     try {
       const plan: unknown = JSON.parse(typeof message.content === 'string' ? message.content : '');
-      if (isRecord(plan) && Array.isArray(plan.unfulfilled) && plan.unfulfilled.length) return fail(`Nothing was changed. ${plan.unfulfilled.filter(x => typeof x === 'string').join(' ').slice(0, 600)}`, 422);
       return Response.json({ ...applyFinishingPlan(plan, ctx), model });
-    } catch (error) { lastError = error instanceof FinishingPlanError ? error.message : 'AI returned an unreadable edit plan. Nothing was changed. Please retry.'; }
+    } catch (error) {
+      lastError = error instanceof FinishingPlanError ? error.message : 'AI returned an unreadable edit plan. Nothing was changed. Please retry.'; lastStatus = 422;
+      repair = { content: typeof message.content === 'string' ? message.content.slice(0, 16_000) : '{}', reason: lastError };
+    }
   }
-  return fail(lastError, lastError.startsWith('AI is busy') ? 503 : 422);
+  return fail(lastError, lastStatus, lastStatus === 429 ? retryAfter : undefined);
 }
