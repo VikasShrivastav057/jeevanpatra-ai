@@ -1,29 +1,15 @@
-# Artwork replacement
+# Uploaded artwork replacement
 
-In **Finish my biodata**, choose **Generate or replace artwork with AI**. Describe the new subject and adjust the highlighted area. An artwork request entered in the main finishing instruction opens this editor too. Subjects are free-form, rather than limited to deity presets.
+Groq continues to handle writing, field creation, editable template design and finishing instructions. The customer-facing artwork flow uses uploaded pictures, without OpenAI or Groq image calls.
 
-An optional reference upload is private until the customer checks the explicit OpenAI sharing consent. The profile portrait and biodata values are never part of the image request. Only the clean template background, artwork instruction, and opted-in artwork reference are sent.
+In **Finish my biodata**, choose **Replace artwork with an uploaded image**. Upload a JPG, PNG or WebP under 5 MB, select the page area, and adjust the horizontal/vertical crop. **Preview replacement** prepares a full-resolution PNG in the browser and stores it privately with the account. It crops the picture to fill the selected rectangle; transparent areas use an ivory base. It does not synthesize or blend new scenery.
 
-Review the replacement in the biodata, then **Apply artwork & save**. Cancelling or discarding a preview does not update the saved biodata. A storage failure leaves the editor unchanged and permits retrying the save. Restore original artwork is available. Background replacement is independent of the template/layout and uses an owner-scoped generated image, retained across reload and PDF export.
+Review the actual biodata, then **Apply artwork & save**. Only the selected background area changes. The profile portrait, fields, text and layout are retained. A storage or save error leaves the current biodata unchanged. Reload and PDF export retain the replacement. **Restore original artwork & save** is also available.
 
-The editor currently supports templates with raster backgrounds: the three devotional posters, Pearl Jewel Luxe, and Emerald Gold Registry. Other templates continue to support uploaded images and existing design controls. Select the area carefully: pixels outside it are copied directly from the original, while pixels inside it can change with the generated artwork. AI results require visual review.
+The feature supports the five templates with raster backgrounds: three devotional templates, Pearl Jewel Luxe and Emerald Gold Registry. Other templates retain their existing uploaded-image controls.
 
-## Server configuration
+Uploaded references and composites are private owner-scoped files. Reference uploads use artwork filenames; completed composite uploads use unique generated filenames for compatibility with saved background replacements. Profile portrait filenames are never overwritten by this flow. Image processing happens in the browser and sends only the final PNG to private application storage.
 
-- `OPENAI_API_KEY`: server-only image API key, stored as a Vercel Production Secret. Requires API billing credit and image-model access.
-- `OPENAI_IMAGE_MODEL`: optional; defaults to `gpt-image-2.5-sunburst`.
-- Production reads clean template backgrounds directly from `dist/client/templates` in the Vercel container. It never sends a web request back through its own deployment gateway.
-- `PUBLIC_SITE_URL`: optional origin for the HTTP asset loader in development. Falls back to `VERCEL_PROJECT_PRODUCTION_URL`, then the request origin. Production uses the deployed files instead.
-- Existing account database and private Blob storage must be configured.
+Paid generation is disabled by default in the API through `ARTWORK_GENERATION_ENABLED`. Its legacy implementation is retained for explicit future operator opt-in, but the current upload interface never calls it. An OpenAI key or API balance is not needed for this flow.
 
-Requests create one medium-quality 1024×1536 image, with no automatic paid retries. Up to five attempts per account per hour are allowed. Identical retries with the same request ID reuse a previously stored result. An in-flight lock prevents duplicate requests within a server instance. The database-backed hourly count also applies across instances; strict concurrent cross-instance reservation is not implemented.
-
-The server validates template/variant, image ownership, edit bounds, generated-image dimensions, consent and provider responses. It composites only the selected area back into the original-resolution background. A billing/access/provider/storage failure returns a readable error and never applies changes.
-
-## Verification
-
-- Run `npm run build`, then `node scripts/test-artwork-generation.mjs`: actual handler with external boundaries replaced; routing, privacy, owner isolation, reference consent, retry reuse, billing errors, deployed-file loading and exact outside-area pixels.
-- `node scripts/run-finishing-tests.mjs`: existing text, layout, field order and portrait editing regressions.
-- Browser verification covers customer desktop and admin mobile, review before applying, save failure/retry, reload, reference opt-in, restore and the real PDF export flow.
-
-Real image generation was attempted during setup but the connected OpenAI account returned `billing_hard_limit_reached`. Model lookup succeeded; a successful live image generation still needs verification after billing is enabled. Simulated image responses verify application behavior, not image quality or prompt fidelity.
+Validation: build and type checks; existing finishing regression suite; image-processing and request-boundary tests; browser customer desktop/admin mobile tests for exact untouched pixels, crop, preview, upload/save failures, retry, reload, restore and A4 PDF export. Legacy image-provider tests explicitly opt into the disabled generation handler using mock external boundaries.

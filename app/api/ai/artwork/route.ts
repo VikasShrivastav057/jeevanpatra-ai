@@ -19,6 +19,7 @@ export async function POST(request: Request) {
   if (!session) return fail('Sign in to generate artwork.', 401);
   const owner = getStudioOwnerId(session);
   if (!owner) return fail('A signed-in account is required.', 403);
+  if (runtimeEnv.ARTWORK_GENERATION_ENABLED !== 'true') return fail('Upload an artwork image and use Preview replacement. Paid image generation is disabled.', 503);
   if (!runtimeEnv.OPENAI_API_KEY) return fail('Image generation is not connected yet. The administrator needs to connect the image-generation key.', 503);
   if (Number(request.headers.get('content-length')) > 20_000) return fail('Keep the artwork description under 2000 characters.');
   let body: Record<string, unknown>;

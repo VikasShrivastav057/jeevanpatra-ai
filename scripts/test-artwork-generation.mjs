@@ -44,7 +44,7 @@ globalThis.__artworkTest = {
 const bridge = data('const t=globalThis.__artworkTest; export const get=(...a)=>t.get(...a),put=(...a)=>t.put(...a);');
 const auth = data('const t=globalThis.__artworkTest;export const getAppSession=async()=>t.session;export const getStudioOwnerId=s=>s.userId;export const logActivity=async()=>{};');
 const db = data('export const database={prepare:()=>({bind:()=>({first:async()=>({count:globalThis.__artworkTest.quota()})})})};');
-const env = data('export const runtimeEnv={OPENAI_API_KEY:"test-key-not-real",PUBLIC_SITE_URL:"https://public.example.test"};');
+const env = data('export const runtimeEnv={OPENAI_API_KEY:"test-key-not-real",ARTWORK_GENERATION_ENABLED:"true",PUBLIC_SITE_URL:"https://public.example.test"};');
 const templateSource = await compile('lib/artwork-template-source.ts', { './runtime-env': env });
 const routeUrl = await compile('app/api/ai/artwork/route.ts', { '@vercel/blob': bridge, pngjs: pathToFileURL(require.resolve('pngjs')).href, '../../../../lib/app-auth': auth, '../../../../lib/database': db, '../../../../lib/runtime-env': env, '../../../../lib/artwork-generation': generation, '../../../../lib/artwork-pixels': pixels, '../../../../lib/artwork-template-source': templateSource });
 const { POST } = await import(routeUrl);
@@ -66,6 +66,10 @@ globalThis.fetch = async (url, init) => {
 const base = { template: 'mahadev-parvati-devotional', variant: 'template', prompt: 'Replace artwork with Shri Ram and Mata Sita', area, requestId: crypto.randomUUID() };
 const send = value => POST(new Request('http://localhost/api/ai/artwork', { method: 'POST', body: JSON.stringify(value) }));
 try {
+  const { runtimeEnv: config } = await import(env);
+  config.ARTWORK_GENERATION_ENABLED = 'false';
+  const disabled = await send(base); check(disabled.status === 503 && calls === 0, 'production generation is disabled without an external call');
+  config.ARTWORK_GENERATION_ENABLED = 'true';
   let r = await send(base); check(r.ok, 'arbitrary artwork supported'); let result = await r.json(); check(isArtworkReplacement(result.replacement), 'private generated result');
   check(templateUrl === 'https://public.example.test/templates/mahadev-parvati-devotional-frame.png', 'public canonical asset URL overrides forwarded protected hostname');
   check(captured.images.length === 1 && !captured.prompt.includes('qa-one'), 'no portrait or personal values transmitted');
