@@ -6,6 +6,7 @@ import type { UploadedArtwork } from '../lib/uploaded-artwork';
 import type { PhotoAdjustment, PhotoPlacement } from '../lib/photo-adjustment';
 import { ProfilePhoto } from './profile-photo';
 import { isBlessingOffset } from '../lib/blessing-position';
+import { matchesArtwork, type ArtworkReplacement } from '../lib/artwork-generation';
 
 export type FieldSection = 'personal' | 'family' | 'contact' | 'preferences';
 export type ProfileField = { id: string; label: string; value: string; section: FieldSection; group?: string };
@@ -15,7 +16,7 @@ export type BackgroundStyle = 'template' | 'plain' | 'parchment' | 'dots' | 'geo
 export type TemplateColors = { paper: string; primary: string; accent: string; text: string };
 export type TemplateDesign = { name: string; note: string; primary: string; accent: string; paper: string; text: string; borderStyle: BorderStyle; photoShape: 'circle' | 'rounded' | 'square'; layout: 'classic' | 'portrait-top'; fontStyle: 'classic' | 'modern' | 'traditional'; blessing: string; blessingOverride?: string; blessingOffsetX?: number; blessingOffsetY?: number; density?: 'compact' | 'balanced' | 'airy'; artwork?: DevotionalArtwork; nameSize?: 'small' | 'normal' | 'large'; editedProperties?: string[] };
 
-export function BiodataPaper({ template, photo, name, about, fields, design, uploadedArtwork, photoAdjustment, onPhotoPlacementChange, onPhotoMoveEnd, frameStyle = 'template', backgroundStyle = 'template', colorOverride, compact = false }: { template: TemplateId; photo: string; name: string; about: string; fields: ProfileField[]; design?: TemplateDesign; uploadedArtwork?: UploadedArtwork; photoAdjustment?: PhotoAdjustment; onPhotoPlacementChange?: (placement: PhotoPlacement) => void; onPhotoMoveEnd?: () => void; frameStyle?: FrameStyle; backgroundStyle?: BackgroundStyle; colorOverride?: TemplateColors; compact?: boolean }) {
+export function BiodataPaper({ template, photo, name, about, fields, design, uploadedArtwork, artworkReplacement, photoAdjustment, onPhotoPlacementChange, onPhotoMoveEnd, frameStyle = 'template', backgroundStyle = 'template', colorOverride, compact = false }: { template: TemplateId; photo: string; name: string; about: string; fields: ProfileField[]; design?: TemplateDesign; uploadedArtwork?: UploadedArtwork; artworkReplacement?: ArtworkReplacement; photoAdjustment?: PhotoAdjustment; onPhotoPlacementChange?: (placement: PhotoPlacement) => void; onPhotoMoveEnd?: () => void; frameStyle?: FrameStyle; backgroundStyle?: BackgroundStyle; colorOverride?: TemplateColors; compact?: boolean }) {
   const personal = fields.filter((field) => field.section === 'personal' && field.label.trim() && field.value.trim());
   const family = fields.filter((field) => field.section === 'family' && field.label.trim() && field.value.trim());
   const contact = fields.filter((field) => field.section === 'contact' && field.label.trim() && field.value.trim());
@@ -36,7 +37,9 @@ export function BiodataPaper({ template, photo, name, about, fields, design, upl
   const designClasses = design ? [edited('borderStyle') && `design-${design.borderStyle}`, edited('photoShape') && `photo-${design.photoShape}`, edited('layout') && `layout-${design.layout}`, edited('fontStyle') && `font-${design.fontStyle}`, edited('density') && `density-${design.density || 'balanced'}`, design.nameSize && `name-${design.nameSize}`, ...['primary', 'text', 'accent', 'paper'].filter(key => design.editedProperties?.includes(key)).map(key => `color-${key}`), artworkClass].filter(Boolean).join(' ') : '';
   const frameClass = frameStyle === 'template' ? '' : `frame-${frameStyle}`;
   const backgroundClass = backgroundStyle === 'template' ? '' : `background-${backgroundStyle}`;
-  const classes = `bio-paper ${template} ${baseTemplate ? 'template-themed' : ''} ${isAiTemplate ? 'ai-custom' : ''} ${isAiFinished ? 'ai-finished' : ''} ${designClasses} ${frameClass} ${backgroundClass} ${compact ? 'compact' : ''}`;
+  const hasReplacement = matchesArtwork(artworkReplacement, template, design?.artwork);
+  if (hasReplacement) (style as Record<string, unknown>)['--replacement-artwork'] = `url("${artworkReplacement!.src}")`;
+  const classes = `bio-paper ${template} ${baseTemplate ? 'template-themed' : ''} ${isAiTemplate ? 'ai-custom' : ''} ${isAiFinished ? 'ai-finished' : ''} ${designClasses} ${frameClass} ${backgroundClass} ${compact ? 'compact' : ''} ${hasReplacement ? 'has-artwork-replacement' : ''}`;
   const blessing = design?.blessingOverride !== undefined ? design.blessingOverride : isAiTemplate && design.blessing ? design.blessing : baseTemplate?.blessing || design?.blessing || 'Marriage biodata';
   const blessingPosition = design?.blessingOffsetX !== undefined || design?.blessingOffsetY !== undefined ? { transform: `translate(${isBlessingOffset(design?.blessingOffsetX, 'x') ? design.blessingOffsetX : 0}cqw, ${isBlessingOffset(design?.blessingOffsetY, 'y') ? design.blessingOffsetY : 0}cqw)` } : undefined;
   const displayName = name.trim() || 'Your name';
@@ -69,4 +72,3 @@ export function BiodataPaper({ template, photo, name, about, fields, design, upl
     <div className="ornament bottom" aria-hidden="true">✦</div>
   </article>;
 }
-

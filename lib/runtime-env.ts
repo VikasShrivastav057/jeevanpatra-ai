@@ -1,6 +1,8 @@
 export type RuntimeEnvironment = {
   DATABASE_URL?: string;
   GROQ_API_KEY?: string;
+  OPENAI_API_KEY?: string;
+  OPENAI_IMAGE_MODEL?: string;
   GROQ_MODEL?: string;
   GROQ_VISION_MODEL?: string;
   ADMIN_EMAIL?: string;
@@ -16,4 +18,3 @@ export type RuntimeEnvironment = {
 };
 
 export const runtimeEnv = process.env as RuntimeEnvironment;
-

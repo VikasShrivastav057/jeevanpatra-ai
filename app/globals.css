@@ -428,3 +428,7 @@ button:disabled{cursor:not-allowed;opacity:.58;transform:none!important}
 @media(max-width:900px){.auth-page{grid-template-columns:1fr}.auth-brand-panel{min-height:420px}.auth-form-panel{min-height:auto}.admin-metrics{grid-template-columns:repeat(2,1fr)}.creation-admin-grid{grid-template-columns:1fr}}
 @media(max-width:620px){.auth-brand-panel{min-height:380px;padding:24px}.auth-brand-copy h1{font-size:42px}.auth-brand-copy>p:last-child{font-size:14px}.auth-trust-list{display:none}.auth-form-panel{padding:18px}.auth-card{border-radius:22px;padding:22px}.admin-header{align-items:flex-start}.admin-secure{display:none}.admin-header .soft-button{font-size:0}.admin-header .soft-button svg{margin:0}.admin-heading{align-items:flex-start;flex-direction:column}.admin-metrics{grid-template-columns:1fr}.admin-tabs{overflow:auto}.admin-tabs button{white-space:nowrap}.creation-admin-card dl{grid-template-columns:1fr}.creation-fields p{grid-template-columns:1fr}.admin-table th,.admin-table td{padding:12px}}
 
+/* Generated replacement changes only the background bitmap, retaining all layout classes. */
+.bio-paper.template-themed.mahadev-parvati-devotional.has-artwork-replacement,.bio-paper.template-themed.has-artwork-replacement{background-image:var(--replacement-artwork)!important}
+.artwork-result-preview{container-type:inline-size;max-width:460px;margin-inline:auto}.artwork-result-preview .bio-paper{width:100%;margin:0}
+

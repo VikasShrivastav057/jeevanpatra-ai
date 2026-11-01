@@ -12,6 +12,8 @@ import type { FinishResult } from '../../lib/finishing-plan';
 import { PhotoCropEditor } from '../../components/profile-photo';
 import { boundPhotoPlacement, defaultPhotoCrop, isPhotoAdjustment, isPhotoOffset, resizePhoto, sameExceptPhotoAdjustment, type PhotoAdjustment, type PhotoCrop } from '../../lib/photo-adjustment';
 import { isBlessingOffset } from '../../lib/blessing-position';
+import { ArtworkGenerator, type ArtworkGeneratorHandle } from '../../components/artwork-generator';
+import { artworkSource, isArtworkReplacement, requestsGeneratedArtwork, type ArtworkReplacement } from '../../lib/artwork-generation';
 import { BiodataPaper, type BackgroundStyle, type FieldSection, type FrameStyle, type ProfileField, type TemplateColors, type TemplateDesign } from '../../components/biodata-paper';
 
 type AiTone = 'warm' | 'concise' | 'traditional';
@@ -154,6 +156,7 @@ function completionSignature(value: {
   colorPreset: ColorPresetId;
   customColors: TemplateColors;
   uploadedArtwork?: UploadedArtwork;
+  artworkReplacement?: ArtworkReplacement;
   photoAdjustment?: PhotoAdjustment;
 }) {
   return JSON.stringify(value);
@@ -208,6 +211,9 @@ export default function Home() {
   const [lastFinishChanges, setLastFinishChanges] = useState<string[]>([]);
   const finishRequest = useRef<AbortController | undefined>(undefined);
   const [uploadedArtwork, setUploadedArtwork] = useState<UploadedArtwork>();
+  const [artworkReplacement, setArtworkReplacement] = useState<ArtworkReplacement>();
+  const [artworkBusy, setArtworkBusy] = useState(false);
+  const artworkGenerator = useRef<ArtworkGeneratorHandle>(null);
   const [artworkUploadState, setArtworkUploadState] = useState<'idle' | 'uploading' | 'error'>('idle');
   const [artworkUploadError, setArtworkUploadError] = useState('');
   const artworkInput = useRef<HTMLInputElement>(null);
@@ -237,7 +243,7 @@ export default function Home() {
     if (colorPreset === 'custom') return customColors;
     return colorPresets.find((option) => option.id === colorPreset)?.colors;
   }, [colorPreset, customColors]);
-  const currentCompletionSignature = useMemo(() => completionSignature({ name, about, profileFields, template, customDesign, finishDesign, frameStyle, backgroundStyle, colorPreset, customColors, uploadedArtwork, photoAdjustment }), [about, backgroundStyle, colorPreset, customColors, customDesign, finishDesign, frameStyle, name, profileFields, template, uploadedArtwork, photoAdjustment]);
+  const currentCompletionSignature = useMemo(() => completionSignature({ name, about, profileFields, template, customDesign, finishDesign, frameStyle, backgroundStyle, colorPreset, customColors, uploadedArtwork, artworkReplacement, photoAdjustment }), [about, backgroundStyle, colorPreset, customColors, customDesign, finishDesign, frameStyle, name, profileFields, template, uploadedArtwork, artworkReplacement, photoAdjustment]);
   const latestFinishSignature = useRef(currentCompletionSignature);
   latestFinishSignature.current = currentCompletionSignature;
   const finishRequestKey = JSON.stringify({ styleRecommendation, stylePreference, finishChangeTargets, finishImprovementMode });
@@ -264,6 +270,8 @@ export default function Home() {
       let restoredCompletedSignature: string | undefined;
       let savedProfileCustomDesign: TemplateDesign | undefined;
       let restoredUploadedArtwork: UploadedArtwork | undefined;
+      let restoredArtworkReplacement: ArtworkReplacement | undefined;
+      let draftHasReplacementSetting = false;
       let restoredPhotoAdjustment: PhotoAdjustment | undefined;
       let draftHasPhotoSetting = false;
       let draftHasArtworkSetting = false;
@@ -277,6 +285,8 @@ export default function Home() {
           draftHasPhotoSetting = 'photoAdjustment' in draft;
           if (isPhotoAdjustment(draft.photoAdjustment)) restoredPhotoAdjustment = draft.photoAdjustment;
           draftHasArtworkSetting = 'uploadedArtwork' in draft;
+          draftHasReplacementSetting = 'artworkReplacement' in draft;
+          if ('artworkReplacement' in draft && isArtworkReplacement(draft.artworkReplacement)) restoredArtworkReplacement = draft.artworkReplacement;
           if (isUploadedArtwork(draft.uploadedArtwork)) restoredUploadedArtwork = draft.uploadedArtwork;
           if (typeof draft.name === 'string') restoredName = draft.name;
           if (typeof draft.about === 'string') restoredAbout = draft.about;
@@ -307,6 +317,7 @@ export default function Home() {
         const details = profile && isRecord(profile.details) ? profile.details : undefined;
         if (!draftHasPhotoSetting && details && isPhotoAdjustment(details.photoAdjustment)) restoredPhotoAdjustment = details.photoAdjustment;
         if (!draftHasArtworkSetting && details && isUploadedArtwork(details.uploadedArtwork)) restoredUploadedArtwork = details.uploadedArtwork;
+        if (!draftHasReplacementSetting && details && isArtworkReplacement(details.artworkReplacement)) restoredArtworkReplacement = details.artworkReplacement;
         if (profile?.template === 'ai-custom' && details && isTemplateDesign(details.customDesign)) savedProfileCustomDesign = details.customDesign;
         if (details && restoredBackgroundStyle === undefined && isBackgroundStyle(details.backgroundStyle)) restoredBackgroundStyle = details.backgroundStyle;
         if (details && restoredColorPreset === undefined && isColorPresetId(details.colorPreset)) restoredColorPreset = details.colorPreset;
@@ -358,6 +369,7 @@ export default function Home() {
       if (restoredCustomColors) setCustomColors(restoredCustomColors);
       if (restoredCompletedSignature) setCompletedSignature(restoredCompletedSignature);
       if (restoredUploadedArtwork) setUploadedArtwork(restoredUploadedArtwork);
+      if (restoredArtworkReplacement) setArtworkReplacement(restoredArtworkReplacement);
       if (restoredPhotoAdjustment) setPhotoAdjustment(restoredPhotoAdjustment);
       if (restoredPhotoKey) {
         const filename = restoredPhotoKey.split('/').at(-1);
@@ -378,8 +390,8 @@ export default function Home() {
 
   useEffect(() => {
     if (!draftReady) return;
-    sessionStorage.setItem(draftKey, JSON.stringify({ name, about, profileFields, template, customDesign, finishDesign, frameStyle, backgroundStyle, colorPreset, customColors, photoKey, uploadedArtwork: uploadedArtwork ?? null, photoAdjustment: photoAdjustment ?? null }));
-  }, [about, backgroundStyle, colorPreset, customColors, customDesign, draftReady, finishDesign, frameStyle, name, photoKey, profileFields, template, uploadedArtwork, photoAdjustment]);
+    sessionStorage.setItem(draftKey, JSON.stringify({ name, about, profileFields, template, customDesign, finishDesign, frameStyle, backgroundStyle, colorPreset, customColors, photoKey, uploadedArtwork: uploadedArtwork ?? null, artworkReplacement: artworkReplacement ?? null, photoAdjustment: photoAdjustment ?? null }));
+  }, [about, backgroundStyle, colorPreset, customColors, customDesign, draftReady, finishDesign, frameStyle, name, photoKey, profileFields, template, uploadedArtwork, artworkReplacement, photoAdjustment]);
 
   useEffect(() => {
     const context = (document as unknown as { modelContext?: { registerTool?: (tool: unknown, options?: { signal: AbortSignal }) => void | Promise<void> } }).modelContext;
@@ -465,14 +477,14 @@ export default function Home() {
     setTimeout(() => setSaveState('Save my biodata'), 2200);
     return true;
   }
-  async function persistProfile(input: { completed: boolean; signature: string; nextAbout?: string; nextFields?: ProfileField[]; nextCustomDesign?: TemplateDesign; nextFinishDesign?: TemplateDesign; nextFrameStyle?: FrameStyle; nextBackgroundStyle?: BackgroundStyle; nextColorPreset?: ColorPresetId; nextColors?: TemplateColors; nextArtwork?: UploadedArtwork; nextPhotoAdjustment?: PhotoAdjustment }) {
+  async function persistProfile(input: { completed: boolean; signature: string; nextAbout?: string; nextFields?: ProfileField[]; nextCustomDesign?: TemplateDesign; nextFinishDesign?: TemplateDesign; nextFrameStyle?: FrameStyle; nextBackgroundStyle?: BackgroundStyle; nextColorPreset?: ColorPresetId; nextColors?: TemplateColors; nextArtwork?: UploadedArtwork; nextReplacement?: ArtworkReplacement | null; nextPhotoAdjustment?: PhotoAdjustment }) {
     const response = await fetch('/api/biodata', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
       name,
       introduction: input.nextAbout ?? about,
       template,
       photoKey,
       completed: input.completed,
-      details: { profileFields: input.nextFields ?? profileFields, customDesign: input.nextCustomDesign ?? customDesign, finishDesign: input.nextFinishDesign ?? finishDesign, frameStyle: input.nextFrameStyle ?? frameStyle, backgroundStyle: input.nextBackgroundStyle ?? backgroundStyle, colorPreset: input.nextColorPreset ?? colorPreset, customColors: input.nextColors ?? customColors, completionSignature: input.signature, uploadedArtwork: input.nextArtwork ?? uploadedArtwork ?? null, photoAdjustment: input.nextPhotoAdjustment ?? photoAdjustment ?? null },
+      details: { profileFields: input.nextFields ?? profileFields, customDesign: input.nextCustomDesign ?? customDesign, finishDesign: input.nextFinishDesign ?? finishDesign, frameStyle: input.nextFrameStyle ?? frameStyle, backgroundStyle: input.nextBackgroundStyle ?? backgroundStyle, colorPreset: input.nextColorPreset ?? colorPreset, customColors: input.nextColors ?? customColors, completionSignature: input.signature, uploadedArtwork: input.nextArtwork ?? uploadedArtwork ?? null, artworkReplacement: input.nextReplacement === undefined ? artworkReplacement ?? null : input.nextReplacement, photoAdjustment: input.nextPhotoAdjustment ?? photoAdjustment ?? null },
     }) });
     if (response.status === 401) { window.location.href = `/login?return_to=${encodeURIComponent(window.location.pathname + window.location.search)}`; throw new Error('Sign in to continue.'); }
     const data = await response.json().catch(() => ({})) as { error?: string };
@@ -635,6 +647,10 @@ export default function Home() {
     } catch (error) { setArtworkUploadState('error'); setArtworkUploadError(error instanceof Error ? error.message : 'Your image could not be uploaded.'); }
   }
   async function finishWithAi() {
+    if (artworkBusy) return;
+    if (requestsGeneratedArtwork(styleRecommendation) && artworkSource(template, (template === 'ai-custom' ? customDesign : finishDesign)?.artwork) && artworkGenerator.current) {
+      setFinishReview(undefined); setFinishError(''); artworkGenerator.current.prepare(styleRecommendation); return;
+    }
     if (finishState === 'loading' || finishState === 'saving' || artworkUploadState === 'uploading') return;
     if (photoUploadRequest.current) { setFinishError('Wait for your profile photo to finish uploading, then try again.'); return; }
     finishRequest.current?.abort();
@@ -658,8 +674,17 @@ export default function Home() {
       setFinishReview({ result: data, signature, requestKey: finishRequestKey }); setFinishState('idle');
     } catch (error) { if (!controller.signal.aborted && finishRequest.current === controller) { setFinishState('error'); setFinishError(error instanceof Error ? error.message : 'Nothing was changed. Please retry.'); } }
   }
+  async function applyGeneratedArtwork(replacement: ArtworkReplacement | null) {
+    if (!name.trim()) throw new Error('Add your name before saving the artwork.');
+    const nextReplacement = replacement ?? undefined;
+    const signature = completionSignature({ name, about, profileFields, template, customDesign, finishDesign, frameStyle, backgroundStyle, colorPreset, customColors, uploadedArtwork, artworkReplacement: nextReplacement, photoAdjustment });
+    await persistProfile({ completed: true, signature, nextReplacement: replacement });
+    setArtworkReplacement(nextReplacement); setCompletedSignature(signature); setSaveState('Completed & saved ✓');
+    setFinishReview(undefined); setLastFinishChanges([replacement ? 'Replaced the selected artwork area' : 'Restored the original artwork']);
+  }
   function closeFinishing() {
     if (finishState === 'saving') return;
+    setArtworkBusy(false);
     finishRequest.current?.abort(); finishRequest.current = undefined;
     setFinishOpen(false); setFinishReview(undefined); setFinishState('idle'); setFinishError('');
   }
@@ -688,7 +713,7 @@ export default function Home() {
       const photoMoved = data.changes.some(change => /^profilePhoto\.offset[XY]:/.test(change.target));
       if (photoMoved && !isPhotoOffset(data.visuals.profilePhoto?.offset)) throw new Error('The profile photo movement could not be verified. Nothing was applied.');
       const nextPhotoAdjustment: PhotoAdjustment | undefined = photoMoved ? { ...photoAdjustment, offset: data.visuals.profilePhoto!.offset } : photoAdjustment;
-      const signature = completionSignature({ name, about: data.introduction, profileFields: nextFields, template, customDesign: nextCustomDesign, finishDesign: nextFinishDesign, frameStyle: nextFrameStyle, backgroundStyle: nextBackgroundStyle, colorPreset: nextColorPreset, customColors: nextColors, uploadedArtwork: nextArtwork, photoAdjustment: nextPhotoAdjustment });
+      const signature = completionSignature({ name, about: data.introduction, profileFields: nextFields, template, customDesign: nextCustomDesign, finishDesign: nextFinishDesign, frameStyle: nextFrameStyle, backgroundStyle: nextBackgroundStyle, colorPreset: nextColorPreset, customColors: nextColors, uploadedArtwork: nextArtwork, artworkReplacement, photoAdjustment: nextPhotoAdjustment });
       // Save successfully before committing any of the AI edits to the editor.
       await persistProfile({ completed: true, signature, nextAbout: data.introduction, nextFields, nextCustomDesign, nextFinishDesign, nextFrameStyle, nextBackgroundStyle, nextColorPreset, nextColors, nextArtwork, nextPhotoAdjustment });
       setAbout(data.introduction); setProfileFields(nextFields);
@@ -758,7 +783,7 @@ export default function Home() {
                 <label>Photo up / down<input type="range" min="0" max={100 - photoAdjustment.placement.width * 210 / 297} step="0.1" value={photoAdjustment.placement.y} onChange={event => { const y = Number(event.target.value); setPhotoAdjustment(current => current?.placement ? { ...current, placement: boundPhotoPlacement({ ...current.placement, y }) } : current); }} /></label>
                 <div className="flex flex-wrap gap-2"><button type="button" className="primary-button" onClick={() => setPhotoMoveMode(false)}>Done positioning</button><button type="button" className="soft-button" onClick={() => { setPhotoAdjustment(current => current?.crop ? { crop: current.crop } : undefined); setPhotoMoveMode(false); }}>Reset photo position</button></div>
               </section>}
-              <BiodataPaper template={template} photo={photo} name={name} about={about} fields={profileFields} design={template === 'ai-custom' ? customDesign : finishDesign} uploadedArtwork={uploadedArtwork} photoAdjustment={photoAdjustment} onPhotoPlacementChange={photoMoveMode ? placement => setPhotoAdjustment(current => ({ crop: current?.crop || { ...defaultPhotoCrop }, placement })) : undefined} onPhotoMoveEnd={() => setPhotoMoveMode(false)} frameStyle={frameStyle} backgroundStyle={backgroundStyle} colorOverride={activeColorOverride} />
+              <BiodataPaper template={template} photo={photo} name={name} about={about} fields={profileFields} design={template === 'ai-custom' ? customDesign : finishDesign} uploadedArtwork={uploadedArtwork} artworkReplacement={artworkReplacement} photoAdjustment={photoAdjustment} onPhotoPlacementChange={photoMoveMode ? placement => setPhotoAdjustment(current => ({ crop: current?.crop || { ...defaultPhotoCrop }, placement })) : undefined} onPhotoMoveEnd={() => setPhotoMoveMode(false)} frameStyle={frameStyle} backgroundStyle={backgroundStyle} colorOverride={activeColorOverride} />
             </section>
             <aside className="editor-panel print:hidden" id="templates">
               <div className="panel-title"><span>03</span> Choose a style</div>
@@ -883,6 +908,7 @@ export default function Home() {
         </section>
         </fieldset>
         <p className="privacy-note">Your uploaded image is stored privately with your account and included in the biodata and PDF. It is not sent to Groq. Your visual choices, introduction and field labels are sent to Groq; other field values are not sent.</p>
+        <ArtworkGenerator key={`${template}:${(template === 'ai-custom' ? customDesign : finishDesign)?.artwork || 'template'}`} ref={artworkGenerator} template={template} variant={(template === 'ai-custom' ? customDesign : finishDesign)?.artwork || 'template'} current={artworkReplacement} signature={currentCompletionSignature} disabled={finishState === 'loading' || finishState === 'saving' || artworkUploadState === 'uploading'} onBusyChange={setArtworkBusy} onApply={applyGeneratedArtwork} renderPreview={replacement => <BiodataPaper template={template} photo={photo} name={name} about={about} fields={profileFields} design={template === 'ai-custom' ? customDesign : finishDesign} uploadedArtwork={uploadedArtwork} artworkReplacement={replacement} photoAdjustment={photoAdjustment} frameStyle={frameStyle} backgroundStyle={backgroundStyle} colorOverride={activeColorOverride} />} />
         {currentFinishReview && <section className="finish-review" aria-label="Review proposed changes" aria-live="polite">
           <h3 className="font-serif text-2xl">Review the exact changes</h3>
           <p className="mt-2 text-xs leading-5">{currentFinishReview.result.changes.length ? 'Only the changes listed below will be applied. Your template, photo file and field values are preserved.' : 'Your settings already match this request. No content or design changes are proposed; you can save the completed biodata.'}</p>
@@ -891,7 +917,7 @@ export default function Home() {
         </section>}
         {finishReview && !currentFinishReview && <output className="privacy-note block">Your instructions or biodata changed. Review a fresh plan before applying it.</output>}
         {finishError && <p className="ai-error" role="alert">{finishError}</p>}
-        {!currentFinishReview && <button className="primary-button mt-6 w-full justify-center py-3.5" onClick={finishWithAi} disabled={finishState === 'loading' || finishState === 'saving' || artworkUploadState === 'uploading'}><Sparkles size={17} /> {finishState === 'loading' ? 'Checking your requested edits…' : 'Review changes with AI'}</button>}
+        {!currentFinishReview && <button className="primary-button mt-6 w-full justify-center py-3.5" onClick={finishWithAi} disabled={artworkBusy || finishState === 'loading' || finishState === 'saving' || artworkUploadState === 'uploading'}><Sparkles size={17} /> {finishState === 'loading' ? 'Checking your requested edits…' : 'Review changes with AI'}</button>}
       </Modal>}
     </main>
   );

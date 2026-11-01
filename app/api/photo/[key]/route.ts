@@ -7,9 +7,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ key:
   const ownerId = getStudioOwnerId(session);
   if (!ownerId) return new Response('Unauthorized', { status: 401 });
   const { key } = await params;
-  if (!/^(?:portrait\.(?:jpg|png)|artwork-[a-f0-9-]{36}\.(?:jpg|png|webp))$/.test(key)) return new Response('Not found', { status: 404 });
+  if (!/^(?:portrait\.(?:jpg|png)|artwork-[a-f0-9-]{36}\.(?:jpg|png|webp)|generated-[a-f0-9-]{36}\.png)$/.test(key)) return new Response('Not found', { status: 404 });
   const object = await get(`profiles/${ownerId}/${key}`, { access: 'private', useCache: false });
   if (!object) return new Response('Not found', { status: 404 });
   return new Response(object.stream, { headers: { 'content-type': object.blob.contentType ?? 'image/jpeg', 'cache-control': 'private, no-store, max-age=0' } });
 }
-
