@@ -132,6 +132,8 @@ function authorize(op: Operation, ctx: FinishContext) {
 export function directFinishingPlan(ctx: FinishContext): unknown {
   assertFinishingRequest(ctx);
   if (finishingClauses(ctx.instruction).every(clause => negative(unquote(clause)))) return { operations: [], unfulfilled: [] };
+  const combined = directCombinedEdits(ctx);
+  if (combined) return combined;
   const blessing = ctx.design.blessingOverride ?? ctx.design.blessing;
   const replacement = readBlessingEdit(ctx.instruction, blessing);
   if (replacement === undefined) {
@@ -158,6 +160,28 @@ export function directFinishingPlan(ctx: FinishContext): unknown {
   if (clauses(rest).some(clause => positive(clause) && /\b(add|remove|hide|move|change|replace|make|use|set|rename|group|rewrite|increase|reduce|reorder|rearrange|arrange|sort|swap)\b/i.test(clause))) return undefined;
   if (/\b(?:and|also|but)\s+(?:change|move|shift|add|remove|replace|rename|rewrite|increase|reduce|make|use|set|enlarge|shrink|reorder|rearrange|arrange|sort|swap)\b/i.test(rest)) return undefined;
   return { operations: [{ target: 'design.blessingOverride', value: replacement, evidence: ctx.instruction }], unfulfilled: [], direct: true };
+}
+
+/** Compose only fully understood clauses; unknown clauses keep the whole request on the planner path. */
+function directCombinedEdits(ctx: FinishContext) {
+  const operations: Operation[] = []; let orderedFields = ctx.fields, reordered = false;
+  for (const evidence of finishingClauses(ctx.instruction)) {
+    if (negative(unquote(evidence))) continue;
+    const replacement = readBlessingEdit(evidence, ctx.design.blessingOverride ?? ctx.design.blessing);
+    if (replacement !== undefined) { operations.push({ target: 'design.blessingOverride', value: replacement, evidence }); continue; }
+    const renames = ctx.fields.flatMap(field => {
+      const value = readBlessingEdit(evidence.replace(/\b(rename|relabel)\b/gi, 'change'), field.label, normalize(field.label) === 'date of birth' ? 'DOB' : field.label);
+      return value === undefined ? [] : [{ target: 'field.label', id: field.id, value, evidence }];
+    });
+    if (renames.length) { operations.push(...renames); continue; }
+    const style = literalStyleEdit(evidence);
+    if (style) { operations.push(style); continue; }
+    const order = requestsFieldOrder(evidence) ? readFieldOrderRequest(evidence, orderedFields) : undefined;
+    if (order) { orderedFields = order.order.map(id => ctx.fields.find(field => field.id === id)!); reordered = true; continue; }
+    return undefined;
+  }
+  if (reordered) operations.push({ target: 'fieldOrder', value: orderedFields.map(field => field.id), evidence: ctx.instruction });
+  return operations.length ? { operations, unfulfilled: [] } : undefined;
 }
 
 export function assertFinishingRequest(ctx: FinishContext) {
@@ -283,10 +307,11 @@ export function applyFinishingPlan(raw: unknown, ctx: FinishContext): FinishResu
       if (!Array.isArray(op.value) || op.value.length !== ctx.fields.length || new Set(op.value).size !== ctx.fields.length || op.value.some(id => !ctx.fields.some(f => f.id === id))) throw new FinishingPlanError('AI tried to add or omit fields. Nothing was changed.');
       op.value = canonicalFieldOrder(op.value as string[], ctx.fields);
       let intended;
-      try { intended = readFieldOrderRequest(op.evidence, ctx.fields); } catch (error) { throw new FinishingPlanError(error instanceof Error ? error.message : 'Please clarify the requested field order.'); }
+      const orderingClauses = finishingClauses(op.evidence).filter(clause => !negative(unquote(clause)) && requestsFieldOrder(clause)).join('. ');
+      try { intended = readFieldOrderRequest(op.evidence, ctx.fields) || readFieldOrderRequest(orderingClauses, ctx.fields); } catch (error) { throw new FinishingPlanError(error instanceof Error ? error.message : 'Please clarify the requested field order.'); }
       if (intended && JSON.stringify(op.value) !== JSON.stringify(intended.order)) throw new FinishingPlanError('AI did not follow the requested field order. Nothing was changed.');
       let mentioned;
-      try { mentioned = orderMentionedIds(op.evidence, ctx.fields); } catch (error) { throw new FinishingPlanError(error instanceof Error ? error.message : 'Please clarify the field names.'); }
+      try { const orderedNames = orderMentionedIds(orderingClauses, ctx.fields); mentioned = orderedNames.length ? orderedNames : orderMentionedIds(op.evidence, ctx.fields); } catch (error) { throw new FinishingPlanError(error instanceof Error ? error.message : 'Please clarify the field names.'); }
       const named = new Set([...mentioned, ...alphabeticalFieldIds(op.evidence, ctx.fields)]);
       if (!/\b(?:all|every)\s+fields?\b/i.test(op.evidence)) {
         for (const group of new Set(ctx.fields.map(fieldOrderGroup))) {
