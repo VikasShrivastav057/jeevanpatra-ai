@@ -3,6 +3,8 @@ export type RuntimeEnvironment = {
   GROQ_API_KEY?: string;
   OPENAI_API_KEY?: string;
   OPENAI_IMAGE_MODEL?: string;
+  PUBLIC_SITE_URL?: string;
+  VERCEL_PROJECT_PRODUCTION_URL?: string;
   GROQ_MODEL?: string;
   GROQ_VISION_MODEL?: string;
   ADMIN_EMAIL?: string;

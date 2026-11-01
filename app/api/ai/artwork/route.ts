@@ -43,13 +43,16 @@ export async function POST(request: Request) {
     const filename = `generated-${id}.png`, key = `profiles/${owner}/${filename}`;
     const replacement = { src: `/api/photo/${filename}`, template, variant };
     // A retry of the same request reuses its private result instead of charging twice.
-    if (await get(key, { access: 'private', useCache: false })) return Response.json({ replacement });
+    const cached = await get(key, { access: 'private', useCache: false });
+    if (cached) { await cached.stream?.cancel(); return Response.json({ replacement }); }
     stage = 'quota';
     const quota = await database.prepare("SELECT COUNT(*) AS count FROM activity_logs WHERE user_id = ? AND action = 'artwork_generation_requested' AND created_at > ?").bind(owner, Date.now() - 3_600_000).first<{ count: number }>();
     if (Number(quota?.count) >= 5) return fail('You have used five artwork generations this hour. Try again later or upload an image.', 429);
     stage = 'template-read';
     const original = isArtworkReplacement(current) ? (await ownedImage(owner, current.src)).bytes : new Uint8Array(await (async () => {
-      const response = await fetch(new URL(source, request.url), { signal: AbortSignal.timeout(15_000), redirect: 'error' });
+      // A service's forwarded hostname may be a protected deployment URL, even on the public domain.
+      const origin = runtimeEnv.PUBLIC_SITE_URL || (runtimeEnv.VERCEL_PROJECT_PRODUCTION_URL ? `https://${runtimeEnv.VERCEL_PROJECT_PRODUCTION_URL}` : request.url);
+      const response = await fetch(new URL(source, origin), { signal: AbortSignal.timeout(15_000), redirect: 'error' });
       if (!response.ok) throw new Error('The template artwork could not be opened.');
       return response.arrayBuffer();
     })());

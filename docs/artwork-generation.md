@@ -12,6 +12,7 @@ The editor currently supports templates with raster backgrounds: the three devot
 
 - `OPENAI_API_KEY`: server-only image API key, stored as a Vercel Production Secret. Requires API billing credit and image-model access.
 - `OPENAI_IMAGE_MODEL`: optional; defaults to `gpt-image-2.5-sunburst`.
+- `PUBLIC_SITE_URL`: public canonical site origin on Vercel (currently `https://jeevanpatra-ai.vercel.app`). This prevents loading public template assets through a protected forwarded deployment hostname. Falls back to `VERCEL_PROJECT_PRODUCTION_URL`, then the request origin for local development.
 - Existing account database and private Blob storage must be configured.
 
 Requests create one medium-quality 1024×1536 image, with no automatic paid retries. Up to five attempts per account per hour are allowed. Identical retries with the same request ID reuse a previously stored result. An in-flight lock prevents duplicate requests within a server instance. The database-backed hourly count also applies across instances; strict concurrent cross-instance reservation is not implemented.

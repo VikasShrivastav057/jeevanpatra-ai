@@ -34,7 +34,7 @@ for (let y = 0; y < original.height; y++) for (let x = 0; x < original.width; x+
   assert.equal(output.data[at], inside ? 20 : 170); assert.equal(output.data[at + 3], 170);
 } count++;
 // Test the actual request handler; replace only external auth/storage/provider boundaries.
-const store = new Map(); let quota = 0, calls = 0, providerStatus = 200, providerCode = '', captured, reads = [];
+const store = new Map(); let quota = 0, calls = 0, providerStatus = 200, providerCode = '', captured, reads = [], templateUrl = '';
 globalThis.__artworkTest = {
   session: { userId: 'qa-one', role: 'customer' },
   get: async key => { reads.push(key); return store.has(key) ? { blob: { size: store.get(key).length, contentType: 'image/png' }, stream: new Response(store.get(key)).body } : null; },
@@ -44,12 +44,12 @@ globalThis.__artworkTest = {
 const bridge = data('const t=globalThis.__artworkTest; export const get=(...a)=>t.get(...a),put=(...a)=>t.put(...a);');
 const auth = data('const t=globalThis.__artworkTest;export const getAppSession=async()=>t.session;export const getStudioOwnerId=s=>s.userId;export const logActivity=async()=>{};');
 const db = data('export const database={prepare:()=>({bind:()=>({first:async()=>({count:globalThis.__artworkTest.quota()})})})};');
-const env = data('export const runtimeEnv={OPENAI_API_KEY:"test-key-not-real"};');
+const env = data('export const runtimeEnv={OPENAI_API_KEY:"test-key-not-real",PUBLIC_SITE_URL:"https://public.example.test"};');
 const routeUrl = await compile('app/api/ai/artwork/route.ts', { '@vercel/blob': bridge, pngjs: pathToFileURL(require.resolve('pngjs')).href, '../../../../lib/app-auth': auth, '../../../../lib/database': db, '../../../../lib/runtime-env': env, '../../../../lib/artwork-generation': generation, '../../../../lib/artwork-pixels': pixels });
 const { POST } = await import(routeUrl);
 const nativeFetch = globalThis.fetch;
 globalThis.fetch = async (url, init) => {
-  if (String(url).includes('/templates/')) return new Response(PNG.sync.write(original));
+  if (String(url).includes('/templates/')) { templateUrl = String(url); return new Response(PNG.sync.write(original)); }
   assert.equal(String(url), 'https://api.openai.com/v1/images/edits');
   calls++; captured = JSON.parse(init.body);
   return Response.json(providerStatus === 200 ? { data: [{ b64_json: PNG.sync.write(generated).toString('base64') }] } : { error: { code: providerCode } }, { status: providerStatus });
@@ -58,6 +58,7 @@ const base = { template: 'mahadev-parvati-devotional', variant: 'template', prom
 const send = value => POST(new Request('http://localhost/api/ai/artwork', { method: 'POST', body: JSON.stringify(value) }));
 try {
   let r = await send(base); check(r.ok, 'arbitrary artwork supported'); let result = await r.json(); check(isArtworkReplacement(result.replacement), 'private generated result');
+  check(templateUrl === 'https://public.example.test/templates/mahadev-parvati-devotional-frame.png', 'public canonical asset URL overrides forwarded protected hostname');
   check(captured.images.length === 1 && !captured.prompt.includes('qa-one'), 'no portrait or personal values transmitted');
   check(store.size === 1 && [...store.keys()][0].startsWith('profiles/qa-one/generated-'), 'owner-scoped immutable result');
   await send(base); check(calls === 1, 'duplicate request reuses saved result');
